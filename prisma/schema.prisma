@@ -1,0 +1,129 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  MEMBER
+  ADMIN
+}
+
+enum GameStatus {
+  AVAILABLE
+  BORROWED
+}
+
+enum LoanStatus {
+  ACTIVE
+  RETURNED
+}
+
+model User {
+  id           String               @id @default(cuid())
+  loginId      String               @unique
+  name         String
+  studentId    String?
+  passwordHash String
+  mustChangePassword Boolean              @default(false)
+  role         UserRole             @default(MEMBER)
+  createdAt    DateTime             @default(now())
+  loans        Loan[]
+  meetups      Meetup[]
+  participants MeetupParticipant[]
+  sessions     Session[]
+
+  @@index([loginId])
+  @@index([studentId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([expiresAt])
+}
+
+model Game {
+  id          String     @id @default(cuid())
+  title       String
+  players     String?
+  bestPlayers String?
+  playTime    String?
+  quantity    Int?
+  note        String?
+  genre       String?
+  isPresent   Boolean?
+  weight      String?
+  status      GameStatus @default(AVAILABLE)
+  createdAt   DateTime   @default(now())
+  loans       Loan[]
+  meetups     Meetup[]
+
+  @@index([status])
+  @@index([title])
+}
+
+model GameTable {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  capacity  Int
+  createdAt DateTime @default(now())
+  meetups   Meetup[]
+}
+
+model Loan {
+  id         String     @id @default(cuid())
+  gameId     String
+  borrowerId String
+  status     LoanStatus @default(ACTIVE)
+  borrowedAt DateTime   @default(now())
+  dueAt      DateTime
+  returnedAt DateTime?
+  game       Game       @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  borrower   User       @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([borrowerId])
+  @@index([gameId])
+}
+
+model Meetup {
+  id           String               @id @default(cuid())
+  title        String
+  description  String?
+  startsAt     DateTime
+  maxPeople    Int
+  createdAt    DateTime             @default(now())
+  hostId       String
+  gameId       String?
+  tableId      String
+  host         User                 @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  game         Game?                @relation(fields: [gameId], references: [id], onDelete: SetNull)
+  table        GameTable            @relation(fields: [tableId], references: [id], onDelete: Restrict)
+  participants MeetupParticipant[]
+
+  @@index([startsAt])
+  @@index([hostId])
+  @@index([tableId])
+}
+
+model MeetupParticipant {
+  id        String   @id @default(cuid())
+  meetupId  String
+  userId    String
+  createdAt DateTime @default(now())
+  meetup    Meetup   @relation(fields: [meetupId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([meetupId, userId])
+  @@index([userId])
+}

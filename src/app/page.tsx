@@ -1,0 +1,263 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import type { GameStatus, Prisma } from "@prisma/client";
+import {
+  borrowGameAction,
+  cancelMeetupAction,
+  completeMeetupAction,
+  joinMeetupAction,
+  leaveMeetupAction,
+  logoutAction,
+  returnGameAction
+} from "@/app/actions";
+import { getCurrentUser } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+
+const PAGE_SIZE = 24;
+
+const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit"
+});
+
+type HomePageProps = {
+  searchParams: Promise<{
+    q?: string;
+    status?: string;
+    page?: string;
+  }>;
+};
+
+export default async function HomePage({ searchParams }: HomePageProps) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const params = await searchParams;
+  const q = (params.q ?? "").trim();
+  const status: GameStatus | "ALL" =
+    params.status === "BORROWED" || params.status === "AVAILABLE" ? params.status : "ALL";
+  const page = Math.max(1, Number(params.page ?? "1") || 1);
+
+  const gameWhere: Prisma.GameWhereInput = {
+    ...(q ? { title: { contains: q, mode: "insensitive" as const } } : {}),
+    ...(status !== "ALL" ? { status } : {})
+  };
+
+  const [games, gameTotal, availableCount, activeLoans, meetups] = await Promise.all([
+    prisma.game.findMany({
+      where: gameWhere,
+      orderBy: [{ status: "asc" }, { title: "asc" }],
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      include: {
+        loans: {
+          where: { status: "ACTIVE" },
+          include: {
+            borrower: {
+              select: { id: true, name: true, loginId: true }
+            }
+          }
+        }
+      }
+    }),
+    prisma.game.count({ where: gameWhere }),
+    prisma.game.count({ where: { status: "AVAILABLE" } }),
+    prisma.loan.findMany({
+      where: { status: "ACTIVE" },
+      include: {
+        game: true,
+        borrower: { select: { id: true, name: true, loginId: true } }
+      },
+      orderBy: { borrowedAt: "desc" }
+    }),
+    prisma.meetup.findMany({
+      where: { startsAt: { gte: new Date() } },
+      include: {
+        host: { select: { name: true, loginId: true } },
+        game: true,
+        table: true,
+        participants: {
+          include: {
+            user: { select: { id: true, name: true, loginId: true } }
+          },
+          orderBy: { createdAt: "asc" }
+        }
+      },
+      orderBy: { startsAt: "asc" },
+      take: 12
+    })
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(gameTotal / PAGE_SIZE));
+
+  return (
+    <main className="app-shell">
+      <header className="topbar">
+        <div>
+          <p className="eyebrow">Club Room</p>
+          <h1>보드게임 대여와 약속</h1>
+        </div>
+        <div className="account-box">
+          <span>
+            {user.name} <small>{user.loginId}</small>
+          </span>
+          {user.role === "ADMIN" ? (
+            <Link className="ghost-link" href="/admin">
+              관리자
+            </Link>
+          ) : null}
+          <form action={logoutAction}>
+            <button className="ghost-button">로그아웃</button>
+          </form>
+        </div>
+      </header>
+
+      <section className="stats-grid">
+        <div className="stat">
+          <span>검색 결과</span>
+          <strong>{gameTotal}</strong>
+        </div>
+        <div className="stat">
+          <span>대여 가능</span>
+          <strong>{availableCount}</strong>
+        </div>
+        <div className="stat">
+          <span>예정 약속</span>
+          <strong>{meetups.length}</strong>
+        </div>
+      </section>
+
+      <section className="content-grid">
+        <div className="main-column">
+          <section className="section-block">
+            <div className="section-heading">
+              <h2>보드게임</h2>
+              <span>페이지 {page}/{totalPages}</span>
+            </div>
+
+            <form className="filter-bar">
+              <input name="q" defaultValue={q} placeholder="게임명 검색" />
+              <select name="status" defaultValue={status}>
+                <option value="ALL">전체 상태</option>
+                <option value="AVAILABLE">대여 가능</option>
+                <option value="BORROWED">대여 중</option>
+              </select>
+              <button className="secondary-button">검색</button>
+            </form>
+
+            <div className="game-table">
+              <div className="game-table-head">
+                <span>게임</span>
+                <span>정보</span>
+                <span>상태</span>
+                <span>작업</span>
+              </div>
+              {games.map((game) => {
+                const activeLoan = game.loans[0];
+                const canReturn = activeLoan && (activeLoan.borrower.id === user.id || user.role === "ADMIN");
+
+                return (
+                  <article className="game-row" key={game.id}>
+                    <strong>{game.title}</strong>
+                    <span>
+                      {[game.players, game.bestPlayers ? `베스트 ${game.bestPlayers}` : "", game.playTime ? `${game.playTime}분` : "", game.genre, game.weight ? `웨이트 ${game.weight}` : ""]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                    <span className={game.status === "AVAILABLE" ? "badge green" : "badge amber"}>
+                      {game.status === "AVAILABLE"
+                        ? "대여 가능"
+                        : `${activeLoan?.borrower.name ?? "회원"} 대여 중`}
+                    </span>
+                    {game.status === "AVAILABLE" ? (
+                      <form action={borrowGameAction}>
+                        <input type="hidden" name="gameId" value={game.id} />
+                        <button className="secondary-button">대여</button>
+                      </form>
+                    ) : canReturn && activeLoan ? (
+                      <form action={returnGameAction}>
+                        <input type="hidden" name="loanId" value={activeLoan.id} />
+                        <button className="secondary-button">반납</button>
+                      </form>
+                    ) : (
+                      <span className="muted">반납 예정 {activeLoan ? dateFormatter.format(activeLoan.dueAt) : "-"}</span>
+                    )}
+                  </article>
+                );
+              })}
+              {games.length === 0 ? <p className="empty">조건에 맞는 게임이 없습니다.</p> : null}
+            </div>
+
+            <div className="pager">
+              <Link
+                className={page <= 1 ? "pager-link disabled" : "pager-link"}
+                href={`/?q=${encodeURIComponent(q)}&status=${status}&page=${Math.max(1, page - 1)}`}
+              >
+                이전
+              </Link>
+              <Link
+                className={page >= totalPages ? "pager-link disabled" : "pager-link"}
+                href={`/?q=${encodeURIComponent(q)}&status=${status}&page=${Math.min(totalPages, page + 1)}`}
+              >
+                다음
+              </Link>
+            </div>
+          </section>
+
+          <section className="section-block">
+            <div className="section-heading">
+              <h2>게임 약속</h2>
+              <Link className="secondary-link" href="/meetups/new">
+                약속 만들기
+              </Link>
+            </div>
+            <div className="meetup-list">
+              {meetups.map((meetup) => {
+                const joined = meetup.participants.some((participant) => participant.user.id === user.id);
+                const isFull = meetup.participants.length >= meetup.maxPeople;
+
+                return (
+                  <article className="meetup-row" key={meetup.id}>
+                    <div>
+                      <div className="card-header compact">
+                        <h3>{meetup.title}</h3>
+                        <span className="badge">{meetup.participants.length}/{meetup.maxPeople}</span>
+                      </div>
+                      <p>
+                        {meetup.game?.title ?? "게임 미정"} · {meetup.table.name} · {dateFormatter.format(meetup.startsAt)}
+                      </p>
+                      {meetup.description ? <p className="muted">{meetup.description}</p> : null}
+                      <p className="participants">
+                        {meetup.participants.map((participant) => participant.user.name).join(", ")}
+                      </p>
+                    </div>
+                    <div className="row-actions">
+                      {meetup.hostId === user.id || user.role === "ADMIN" ? (
+                        <Link className="ghost-link" href={`/meetups/${meetup.id}/manage`}>
+                          관리
+                        </Link>
+                      ) : null}
+                      <form action={joined ? leaveMeetupAction : joinMeetupAction}>
+                        <input type="hidden" name="meetupId" value={meetup.id} />
+                        <button className={joined ? "ghost-button" : "secondary-button"} disabled={!joined && isFull}>
+                          {joined ? "참여 취소" : isFull ? "마감" : "참여"}
+                        </button>
+                      </form>
+                    </div>
+                  </article>
+                );
+              })}
+              {meetups.length === 0 ? <p className="empty">아직 잡힌 게임 약속이 없습니다.</p> : null}
+            </div>
+          </section>
+        </div>
+
+      </section>
+    </main>
+  );
+}

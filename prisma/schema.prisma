@@ -22,19 +22,32 @@ enum LoanStatus {
   RETURNED
 }
 
+enum LoanRequestType {
+  BORROW
+  RETURN
+}
+
+enum LoanRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
-  id           String               @id @default(cuid())
-  loginId      String               @unique
-  name         String
-  studentId    String?
-  passwordHash String
-  mustChangePassword Boolean              @default(false)
-  role         UserRole             @default(MEMBER)
-  createdAt    DateTime             @default(now())
-  loans        Loan[]
-  meetups      Meetup[]
-  participants MeetupParticipant[]
-  sessions     Session[]
+  id                   String              @id @default(cuid())
+  loginId              String              @unique
+  name                 String
+  studentId            String?
+  passwordHash         String
+  mustChangePassword   Boolean             @default(false)
+  role                 UserRole            @default(MEMBER)
+  createdAt            DateTime            @default(now())
+  loans                Loan[]
+  loanRequests         LoanRequest[]       @relation("LoanRequestRequester")
+  reviewedLoanRequests LoanRequest[]       @relation("LoanRequestReviewer")
+  meetups              Meetup[]
+  participants         MeetupParticipant[]
+  sessions             Session[]
 
   @@index([loginId])
   @@index([studentId])
@@ -53,20 +66,21 @@ model Session {
 }
 
 model Game {
-  id          String     @id @default(cuid())
-  title       String
-  players     String?
-  bestPlayers String?
-  playTime    String?
-  quantity    Int?
-  note        String?
-  genre       String?
-  isPresent   Boolean?
-  weight      String?
-  status      GameStatus @default(AVAILABLE)
-  createdAt   DateTime   @default(now())
-  loans       Loan[]
-  meetups     Meetup[]
+  id           String        @id @default(cuid())
+  title        String
+  players      String?
+  bestPlayers  String?
+  playTime     String?
+  quantity     Int?
+  note         String?
+  genre        String?
+  isPresent    Boolean?
+  weight       String?
+  status       GameStatus    @default(AVAILABLE)
+  createdAt    DateTime      @default(now())
+  loans        Loan[]
+  loanRequests LoanRequest[]
+  meetups      Meetup[]
 
   @@index([status])
   @@index([title])
@@ -81,34 +95,58 @@ model GameTable {
 }
 
 model Loan {
-  id         String     @id @default(cuid())
+  id         String        @id @default(cuid())
   gameId     String
   borrowerId String
-  status     LoanStatus @default(ACTIVE)
-  borrowedAt DateTime   @default(now())
+  status     LoanStatus    @default(ACTIVE)
+  borrowedAt DateTime      @default(now())
   dueAt      DateTime
   returnedAt DateTime?
-  game       Game       @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  borrower   User       @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  game       Game          @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  borrower   User          @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
+  requests   LoanRequest[]
 
   @@index([status])
   @@index([borrowerId])
   @@index([gameId])
 }
 
+model LoanRequest {
+  id          String            @id @default(cuid())
+  type        LoanRequestType
+  status      LoanRequestStatus @default(PENDING)
+  gameId      String
+  loanId      String?
+  requesterId String
+  reviewerId  String?
+  requestedAt DateTime          @default(now())
+  reviewedAt  DateTime?
+  game        Game              @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  loan        Loan?             @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  requester   User              @relation("LoanRequestRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  reviewer    User?             @relation("LoanRequestReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([type])
+  @@index([gameId])
+  @@index([loanId])
+  @@index([requesterId])
+  @@index([reviewerId])
+}
+
 model Meetup {
-  id           String               @id @default(cuid())
+  id           String              @id @default(cuid())
   title        String
   description  String?
   startsAt     DateTime
   maxPeople    Int
-  createdAt    DateTime             @default(now())
+  createdAt    DateTime            @default(now())
   hostId       String
   gameId       String?
   tableId      String
-  host         User                 @relation(fields: [hostId], references: [id], onDelete: Cascade)
-  game         Game?                @relation(fields: [gameId], references: [id], onDelete: SetNull)
-  table        GameTable            @relation(fields: [tableId], references: [id], onDelete: Restrict)
+  host         User                @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  game         Game?               @relation(fields: [gameId], references: [id], onDelete: SetNull)
+  table        GameTable           @relation(fields: [tableId], references: [id], onDelete: Restrict)
   participants MeetupParticipant[]
 
   @@index([startsAt])

@@ -48,7 +48,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     ...(status !== "ALL" ? { status } : {})
   };
 
-  const [games, gameTotal, availableCount, activeLoans, meetups] = await Promise.all([
+  const [games, gameTotal, availableCount, pendingLoanRequestCount, meetups] = await Promise.all([
     prisma.game.findMany({
       where: gameWhere,
       orderBy: [{ status: "asc" }, { title: "asc" }],
@@ -60,21 +60,35 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           include: {
             borrower: {
               select: { id: true, name: true, loginId: true }
+            },
+            requests: {
+              where: {
+                type: "RETURN",
+                status: "PENDING"
+              },
+              orderBy: { requestedAt: "asc" },
+              take: 1
             }
           }
+        },
+        loanRequests: {
+          where: {
+            type: "BORROW",
+            status: "PENDING"
+          },
+          include: {
+            requester: {
+              select: { id: true, name: true, loginId: true }
+            }
+          },
+          orderBy: { requestedAt: "asc" },
+          take: 1
         }
       }
     }),
     prisma.game.count({ where: gameWhere }),
     prisma.game.count({ where: { status: "AVAILABLE" } }),
-    prisma.loan.findMany({
-      where: { status: "ACTIVE" },
-      include: {
-        game: true,
-        borrower: { select: { id: true, name: true, loginId: true } }
-      },
-      orderBy: { borrowedAt: "desc" }
-    }),
+    prisma.loanRequest.count({ where: { status: "PENDING" } }),
     prisma.meetup.findMany({
       where: { startsAt: { gte: new Date() } },
       include: {
@@ -127,6 +141,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <strong>{availableCount}</strong>
         </div>
         <div className="stat">
+          <span>승인 대기</span>
+          <strong>{pendingLoanRequestCount}</strong>
+        </div>
+        <div className="stat">
           <span>예정 약속</span>
           <strong>{meetups.length}</strong>
         </div>
@@ -159,7 +177,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </div>
               {games.map((game) => {
                 const activeLoan = game.loans[0];
-                const canReturn = activeLoan && (activeLoan.borrower.id === user.id || user.role === "ADMIN");
+                const pendingBorrowRequest = game.loanRequests[0];
+                const pendingReturnRequest = activeLoan?.requests[0];
+                const canReturn =
+                  activeLoan &&
+                  !pendingReturnRequest &&
+                  (activeLoan.borrower.id === user.id || user.role === "ADMIN");
 
                 return (
                   <article className="game-row" key={game.id}>
@@ -170,20 +193,28 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                         .join(" · ")}
                     </span>
                     <span className={game.status === "AVAILABLE" ? "badge green" : "badge amber"}>
-                      {game.status === "AVAILABLE"
-                        ? "대여 가능"
-                        : `${activeLoan?.borrower.name ?? "회원"} 대여 중`}
+                      {game.status === "AVAILABLE" && pendingBorrowRequest
+                        ? `${pendingBorrowRequest.requester.name} 대여 승인 대기`
+                        : game.status === "AVAILABLE"
+                          ? "대여 가능"
+                          : pendingReturnRequest
+                            ? "반납 승인 대기"
+                            : `${activeLoan?.borrower.name ?? "회원"} 대여 중`}
                     </span>
-                    {game.status === "AVAILABLE" ? (
+                    {game.status === "AVAILABLE" && !pendingBorrowRequest ? (
                       <form action={borrowGameAction}>
                         <input type="hidden" name="gameId" value={game.id} />
-                        <button className="secondary-button">대여</button>
+                        <button className="secondary-button">대여 요청</button>
                       </form>
                     ) : canReturn && activeLoan ? (
                       <form action={returnGameAction}>
                         <input type="hidden" name="loanId" value={activeLoan.id} />
-                        <button className="secondary-button">반납</button>
+                        <button className="secondary-button">반납 요청</button>
                       </form>
+                    ) : pendingBorrowRequest ? (
+                      <span className="muted">관리자 승인 대기</span>
+                    ) : pendingReturnRequest ? (
+                      <span className="muted">반납 승인 대기</span>
                     ) : (
                       <span className="muted">반납 예정 {activeLoan ? dateFormatter.format(activeLoan.dueAt) : "-"}</span>
                     )}

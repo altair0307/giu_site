@@ -2,6 +2,6 @@
   "$schema": "https://railway.com/railway.schema.json",
   "deploy": {
     "preDeployCommand": "npm run db:deploy",
-    "startCommand": "npm run start"
+    "startCommand": "HOSTNAME=0.0.0.0 node .next/standalone/server.js"
   }
 }

@@ -217,26 +217,32 @@ export async function borrowGameAction(formData: FormData) {
   assertRateLimit(`borrow:${user.id}`, 12, 60_000);
 
   const gameId = value(formData, "gameId");
-  const dueAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
   await prisma.$transaction(async (tx) => {
     const game = await tx.game.findUnique({ where: { id: gameId } });
 
     if (!game || game.status !== "AVAILABLE") {
-      throw new Error("대여 가능한 게임이 아닙니다.");
+      throw new Error("대여 요청 가능한 게임이 아닙니다.");
     }
 
-    await tx.loan.create({
-      data: {
+    const pendingRequest = await tx.loanRequest.findFirst({
+      where: {
         gameId,
-        borrowerId: user.id,
-        dueAt
+        type: "BORROW",
+        status: "PENDING"
       }
     });
 
-    await tx.game.update({
-      where: { id: gameId },
-      data: { status: "BORROWED" }
+    if (pendingRequest) {
+      throw new Error("이미 대여 승인 대기 중인 게임입니다.");
+    }
+
+    await tx.loanRequest.create({
+      data: {
+        type: "BORROW",
+        gameId,
+        requesterId: user.id
+      }
     });
   });
 
@@ -259,19 +265,155 @@ export async function returnGameAction(formData: FormData) {
   }
 
   if (activeLoan.borrowerId !== user.id && user.role !== "ADMIN") {
-    throw new Error("본인 또는 관리자만 반납 처리할 수 있습니다.");
+    throw new Error("본인 또는 관리자만 반납 요청을 할 수 있습니다.");
   }
 
-  await prisma.$transaction([
-    prisma.loan.update({
-      where: { id: loanId },
-      data: { status: "RETURNED", returnedAt: new Date() }
-    }),
-    prisma.game.update({
-      where: { id: activeLoan.gameId },
-      data: { status: "AVAILABLE" }
-    })
-  ]);
+  const pendingRequest = await prisma.loanRequest.findFirst({
+    where: {
+      loanId,
+      type: "RETURN",
+      status: "PENDING"
+    }
+  });
+
+  if (pendingRequest) {
+    throw new Error("이미 반납 승인 대기 중인 대여 기록입니다.");
+  }
+
+  await prisma.loanRequest.create({
+    data: {
+      type: "RETURN",
+      gameId: activeLoan.gameId,
+      loanId,
+      requesterId: user.id
+    }
+  });
+
+  revalidatePath("/");
+  revalidatePath("/admin");
+}
+
+export async function approveLoanRequestAction(formData: FormData) {
+  const user = await requireUser();
+  assertRateLimit(`approve-loan-request:${user.id}`, 30, 60_000);
+
+  if (user.role !== "ADMIN") {
+    throw new Error("관리자만 대여/반납 요청을 승인할 수 있습니다.");
+  }
+
+  const requestId = value(formData, "requestId");
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    const request = await tx.loanRequest.findUnique({
+      where: { id: requestId },
+      include: { game: true, loan: true }
+    });
+
+    if (!request || request.status !== "PENDING") {
+      throw new Error("승인 가능한 요청이 아닙니다.");
+    }
+
+    if (request.type === "BORROW") {
+      const game = await tx.game.findUnique({ where: { id: request.gameId } });
+
+      if (!game || game.status !== "AVAILABLE") {
+        throw new Error("현재 대여 가능한 게임이 아닙니다.");
+      }
+
+      await tx.loan.create({
+        data: {
+          gameId: request.gameId,
+          borrowerId: request.requesterId,
+          dueAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        }
+      });
+
+      await tx.game.update({
+        where: { id: request.gameId },
+        data: { status: "BORROWED" }
+      });
+
+      await tx.loanRequest.updateMany({
+        where: {
+          id: { not: request.id },
+          gameId: request.gameId,
+          type: "BORROW",
+          status: "PENDING"
+        },
+        data: {
+          status: "REJECTED",
+          reviewerId: user.id,
+          reviewedAt: now
+        }
+      });
+    } else {
+      if (!request.loanId || !request.loan || request.loan.status !== "ACTIVE") {
+        throw new Error("반납 승인 가능한 대여 기록이 아닙니다.");
+      }
+
+      await tx.loan.update({
+        where: { id: request.loanId },
+        data: { status: "RETURNED", returnedAt: now }
+      });
+
+      await tx.game.update({
+        where: { id: request.gameId },
+        data: { status: "AVAILABLE" }
+      });
+
+      await tx.loanRequest.updateMany({
+        where: {
+          id: { not: request.id },
+          loanId: request.loanId,
+          type: "RETURN",
+          status: "PENDING"
+        },
+        data: {
+          status: "REJECTED",
+          reviewerId: user.id,
+          reviewedAt: now
+        }
+      });
+    }
+
+    await tx.loanRequest.update({
+      where: { id: request.id },
+      data: {
+        status: "APPROVED",
+        reviewerId: user.id,
+        reviewedAt: now
+      }
+    });
+  });
+
+  revalidatePath("/");
+  revalidatePath("/admin");
+}
+
+export async function rejectLoanRequestAction(formData: FormData) {
+  const user = await requireUser();
+  assertRateLimit(`reject-loan-request:${user.id}`, 30, 60_000);
+
+  if (user.role !== "ADMIN") {
+    throw new Error("관리자만 대여/반납 요청을 거절할 수 있습니다.");
+  }
+
+  const result = await prisma.loanRequest.updateMany({
+    where: {
+      id: value(formData, "requestId"),
+      status: "PENDING"
+    },
+    data: {
+      status: "REJECTED",
+      reviewerId: user.id,
+      reviewedAt: new Date()
+    }
+  });
+
+  if (result.count === 0) {
+    throw new Error("거절 가능한 요청이 아닙니다.");
+  }
 
   revalidatePath("/");
   revalidatePath("/admin");
@@ -450,9 +592,15 @@ export async function importGamesAction(_: ActionState, formData: FormData): Pro
       return { message: "관리자만 게임 DB를 업로드할 수 있습니다." };
     }
 
-    const activeLoans = await prisma.loan.count({ where: { status: "ACTIVE" } });
+    const [activeLoans, pendingLoanRequests] = await Promise.all([
+      prisma.loan.count({ where: { status: "ACTIVE" } }),
+      prisma.loanRequest.count({ where: { status: "PENDING" } })
+    ]);
     if (activeLoans > 0) {
       return { message: "대여 중인 게임이 있으면 전체 업로드를 할 수 없습니다. 먼저 반납 처리해주세요." };
+    }
+    if (pendingLoanRequests > 0) {
+      return { message: "승인 대기 중인 대여/반납 요청이 있으면 전체 업로드를 할 수 없습니다. 먼저 처리해주세요." };
     }
 
     const file = formData.get("file");

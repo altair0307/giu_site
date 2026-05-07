@@ -18,7 +18,7 @@ const loginIdSchema = z
   .regex(/^[a-zA-Z0-9_-]+$/, "아이디는 영문, 숫자, _, -만 사용할 수 있습니다.");
 
 const passwordSchema = z.string().min(8, "비밀번호는 8자 이상이어야 합니다.");
-const MAX_LOAN_PHOTO_SIZE = 1024 * 1024;
+const MAX_LOAN_PHOTO_SIZE = 8 * 1024 * 1024;
 const ALLOWED_LOAN_PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export type ActionState = {
@@ -50,7 +50,7 @@ async function readLoanPhoto(formData: FormData) {
   }
 
   if (file.size > MAX_LOAN_PHOTO_SIZE) {
-    throw new Error("사진은 1MB 이하로 업로드해주세요.");
+    throw new Error("사진은 8MB 이하로 업로드해주세요.");
   }
 
   return {

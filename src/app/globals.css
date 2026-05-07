@@ -879,6 +879,23 @@ textarea:focus {
   padding: 24px;
 }
 
+.error-shell {
+  min-height: 100vh;
+  display: grid;
+  place-content: center;
+  padding: 24px;
+}
+
+.error-panel {
+  width: min(460px, calc(100vw - 32px));
+  display: grid;
+  gap: 14px;
+}
+
+.error-panel h1 {
+  font-size: 28px;
+}
+
 .auth-panel {
   width: min(420px, calc(100vw - 32px));
   display: grid;

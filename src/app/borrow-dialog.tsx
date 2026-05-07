@@ -4,6 +4,9 @@ import { useEffect, useId, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { borrowGameAction, returnGameAction } from "@/app/actions";
 
+const MAX_PHOTO_SIZE = 8 * 1024 * 1024;
+const ALLOWED_PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
 type BorrowDialogProps = {
   gameId: string;
   gameTitle: string;
@@ -57,6 +60,7 @@ function PhotoActionDialog({
 }: PhotoDialogProps) {
   const [open, setOpen] = useState(false);
   const [hasPhoto, setHasPhoto] = useState(false);
+  const [fileError, setFileError] = useState("");
   const titleId = useId();
 
   useEffect(() => {
@@ -114,10 +118,36 @@ function PhotoActionDialog({
                   accept="image/jpeg,image/png,image/webp"
                   capture="environment"
                   required
-                  onChange={(event) => setHasPhoto((event.currentTarget.files?.length ?? 0) > 0)}
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0];
+
+                    if (!file) {
+                      setHasPhoto(false);
+                      setFileError("");
+                      return;
+                    }
+
+                    if (!ALLOWED_PHOTO_TYPES.has(file.type)) {
+                      event.currentTarget.value = "";
+                      setHasPhoto(false);
+                      setFileError("사진은 JPG, PNG, WebP 형식만 업로드할 수 있습니다.");
+                      return;
+                    }
+
+                    if (file.size > MAX_PHOTO_SIZE) {
+                      event.currentTarget.value = "";
+                      setHasPhoto(false);
+                      setFileError("사진은 8MB 이하로 업로드해주세요.");
+                      return;
+                    }
+
+                    setHasPhoto(true);
+                    setFileError("");
+                  }}
                 />
               </label>
-              <p className="form-note">JPG, PNG, WebP 형식으로 1MB 이하의 사진을 올려주세요.</p>
+              {fileError ? <p className="error">{fileError}</p> : null}
+              <p className="form-note">JPG, PNG, WebP 형식으로 8MB 이하의 사진을 올려주세요.</p>
               <div className="modal-actions">
                 <button className="ghost-button" type="button" onClick={() => setOpen(false)}>
                   취소

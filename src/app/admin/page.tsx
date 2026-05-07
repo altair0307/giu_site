@@ -9,7 +9,6 @@ import {
   rejectLoanRequestAction,
   logoutAction,
   resetUserPasswordAction,
-  updateGameFormAction,
   updateUserFormAction
 } from "@/app/actions";
 import { ActionForm } from "@/app/action-form";
@@ -28,6 +27,8 @@ type AdminPageProps = {
     q?: string;
     userQ?: string;
     notice?: string;
+    gameNotice?: string;
+    gameError?: string;
   }>;
 };
 
@@ -42,6 +43,19 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const q = (params.q ?? "").trim();
   const userQ = (params.userQ ?? "").trim();
   const notice = params.notice;
+  const gameNotice = params.gameNotice;
+  const gameError = params.gameError;
+  const gameEditParams = new URLSearchParams();
+
+  if (q) {
+    gameEditParams.set("q", q);
+  }
+
+  if (userQ) {
+    gameEditParams.set("userQ", userQ);
+  }
+
+  const gameEditReturnTo = `/admin${gameEditParams.size > 0 ? `?${gameEditParams.toString()}` : ""}#game-edit`;
   const [games, users, meetups, loanRequests] = await Promise.all([
     prisma.game.findMany({
       where: q ? { title: { contains: q, mode: "insensitive" } } : {},
@@ -285,10 +299,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             {meetups.length === 0 ? <p className="empty">예정된 게임 약속이 없습니다.</p> : null}
           </div>
 
-          <div className="section-heading">
+          <div className="section-heading" id="game-edit">
             <h2>게임 수정</h2>
             <span>최대 80개 표시</span>
           </div>
+          {gameNotice ? <p className="notice success-notice">{gameNotice}</p> : null}
+          {gameError ? <p className="notice error-notice">{gameError}</p> : null}
           <form className="filter-bar">
             <input name="q" defaultValue={q} placeholder="수정할 게임 검색" />
             <button className="secondary-button">검색</button>
@@ -296,8 +312,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
           <div className="admin-game-list">
             {games.map((game) => (
-              <form action={updateGameFormAction} className="admin-game-row" key={game.id}>
+              <form action="/admin/games/update" method="post" className="admin-game-row" key={game.id}>
                 <input type="hidden" name="id" value={game.id} />
+                <input type="hidden" name="returnTo" value={gameEditReturnTo} />
                 <label>
                   게임명
                   <input name="title" defaultValue={game.title} required />

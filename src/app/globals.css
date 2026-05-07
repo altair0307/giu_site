@@ -476,6 +476,12 @@ textarea:focus {
   color: var(--green);
 }
 
+.error-notice {
+  border: 1px solid rgba(179, 38, 30, 0.25);
+  background: rgba(179, 38, 30, 0.08);
+  color: var(--danger);
+}
+
 .delete-panel {
   width: min(640px, 100%);
   display: grid;

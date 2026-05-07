@@ -113,10 +113,30 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           },
           orderBy: { requestedAt: "asc" },
           take: 1
+        },
+        meetups: {
+          where: {
+            startsAt: { gte: now }
+          },
+          select: {
+            id: true,
+            startsAt: true
+          },
+          orderBy: { startsAt: "asc" },
+          take: 1
         }
       }
     }),
-    prisma.game.count({ where: { status: "AVAILABLE" } }),
+    prisma.game.count({
+      where: {
+        status: "AVAILABLE",
+        meetups: {
+          none: {
+            startsAt: { gte: now }
+          }
+        }
+      }
+    }),
     prisma.loanRequest.count({ where: { status: "PENDING" } }),
     prisma.meetup.findMany({
       where: { startsAt: { gte: new Date() } },
@@ -259,6 +279,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               {games.map((game) => {
                 const activeLoan = game.loans[0];
                 const pendingBorrowRequest = game.loanRequests[0];
+                const upcomingMeetup = game.meetups[0];
                 const pendingReturnRequest = activeLoan?.requests[0];
                 const canReturn =
                   activeLoan &&
@@ -273,16 +294,18 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                         .filter(Boolean)
                         .join(" · ")}
                     </span>
-                    <span className={game.status === "AVAILABLE" ? "badge green" : "badge amber"}>
+                    <span className={game.status === "AVAILABLE" && !upcomingMeetup ? "badge green" : "badge amber"}>
                       {game.status === "AVAILABLE" && pendingBorrowRequest
                         ? `${pendingBorrowRequest.requester.name} 대여 승인 대기`
+                        : game.status === "AVAILABLE" && upcomingMeetup
+                          ? `약속 예정 ${dateFormatter.format(upcomingMeetup.startsAt)}`
                         : game.status === "AVAILABLE"
                           ? "대여 가능"
                           : pendingReturnRequest
                             ? "반납 승인 대기"
                             : `${activeLoan?.borrower.name ?? "회원"} 대여 중`}
                     </span>
-                    {game.status === "AVAILABLE" && !pendingBorrowRequest ? (
+                    {game.status === "AVAILABLE" && !pendingBorrowRequest && !upcomingMeetup ? (
                       <BorrowDialog gameId={game.id} gameTitle={game.title} />
                     ) : canReturn && activeLoan ? (
                       <ReturnDialog loanId={activeLoan.id} gameTitle={game.title} />

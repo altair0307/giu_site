@@ -725,6 +725,10 @@ textarea:focus {
   padding: 10px;
 }
 
+.modal-notice {
+  margin-bottom: 0;
+}
+
 .modal-actions {
   display: grid;
   grid-template-columns: auto 1fr;

@@ -60,6 +60,20 @@ async function readLoanPhoto(formData: FormData) {
   };
 }
 
+async function assertGameHasNoUpcomingMeetup(gameId: string, startsAt = new Date()) {
+  const upcomingMeetup = await prisma.meetup.findFirst({
+    where: {
+      gameId,
+      startsAt: { gte: startsAt }
+    },
+    select: { id: true }
+  });
+
+  if (upcomingMeetup) {
+    throw new Error("이미 예정된 약속이 있는 게임은 대여하거나 다른 약속에 선택할 수 없습니다.");
+  }
+}
+
 export async function registerAction(_: ActionState, formData: FormData): Promise<ActionState> {
   try {
     assertRateLimit(await getClientKey("register"), 5, 60_000);
@@ -246,6 +260,7 @@ export async function borrowGameAction(formData: FormData) {
   const gameId = value(formData, "gameId");
   const photo = await readLoanPhoto(formData);
   const now = new Date();
+  await assertGameHasNoUpcomingMeetup(gameId, now);
 
   await prisma.$transaction(async (tx) => {
     const game = await tx.game.findUnique({ where: { id: gameId } });
@@ -782,6 +797,30 @@ export async function createMeetupAction(_: ActionState, formData: FormData): Pr
 
     if (parsed.startsAt < new Date()) {
       return { message: "미래 시간으로 약속을 잡아주세요." };
+    }
+
+    if (parsed.gameId) {
+      const [game, conflictingMeetup] = await Promise.all([
+        prisma.game.findUnique({
+          where: { id: parsed.gameId },
+          select: { status: true }
+        }),
+        prisma.meetup.findFirst({
+          where: {
+            gameId: parsed.gameId,
+            startsAt: { gte: new Date() }
+          },
+          select: { id: true }
+        })
+      ]);
+
+      if (!game || game.status !== "AVAILABLE") {
+        return { message: "대여 중인 게임은 약속에 선택할 수 없습니다." };
+      }
+
+      if (conflictingMeetup) {
+        return { message: "이미 예정된 약속이 있는 게임은 선택할 수 없습니다." };
+      }
     }
 
     const meetup = await prisma.meetup.create({

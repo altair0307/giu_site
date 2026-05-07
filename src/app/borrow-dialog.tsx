@@ -4,7 +4,7 @@ import { useEffect, useId, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { borrowGameAction, returnGameAction } from "@/app/actions";
 
-const MAX_PHOTO_SIZE = 8 * 1024 * 1024;
+const MAX_PHOTO_SIZE = 1024 * 1024;
 const ALLOWED_PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 type BorrowDialogProps = {
@@ -25,6 +25,7 @@ type PhotoDialogProps = {
   eyebrow: string;
   title: string;
   fieldLabel: string;
+  note?: string;
   submitLabel: string;
   pendingLabel: string;
 };
@@ -55,6 +56,7 @@ function PhotoActionDialog({
   eyebrow,
   title,
   fieldLabel,
+  note,
   submitLabel,
   pendingLabel
 }: PhotoDialogProps) {
@@ -137,7 +139,7 @@ function PhotoActionDialog({
                     if (file.size > MAX_PHOTO_SIZE) {
                       event.currentTarget.value = "";
                       setHasPhoto(false);
-                      setFileError("사진은 8MB 이하로 업로드해주세요.");
+                      setFileError("사진은 1MB 이하로 업로드해주세요.");
                       return;
                     }
 
@@ -147,7 +149,8 @@ function PhotoActionDialog({
                 />
               </label>
               {fileError ? <p className="error">{fileError}</p> : null}
-              <p className="form-note">JPG, PNG, WebP 형식으로 8MB 이하의 사진을 올려주세요.</p>
+              {note ? <p className="notice warning-notice modal-notice">{note}</p> : null}
+              <p className="form-note">JPG, PNG, WebP 형식으로 1MB 이하의 사진을 올려주세요.</p>
               <div className="modal-actions">
                 <button className="ghost-button" type="button" onClick={() => setOpen(false)}>
                   취소
@@ -172,6 +175,7 @@ export function BorrowDialog({ gameId, gameTitle }: BorrowDialogProps) {
       eyebrow="Borrow"
       title={gameTitle}
       fieldLabel="대여 전 게임 사진"
+      note="대여기간은 승인 시점부터 최대 7일입니다."
       submitLabel="사진 업로드 후 대여 완료"
       pendingLabel="대여 처리 중..."
     />

@@ -24,16 +24,28 @@ export default async function NewMeetupPage({ searchParams }: NewMeetupPageProps
   const params = await searchParams;
   const gameQ = (params.gameQ ?? "").trim();
   const page = Math.max(1, Number(params.page ?? "1") || 1);
-  const gameWhere = gameQ ? { title: { contains: gameQ, mode: "insensitive" as const } } : {};
+  const now = new Date();
+  const gameWhere = {
+    status: "AVAILABLE" as const,
+    meetups: {
+      none: {
+        startsAt: { gte: now }
+      }
+    },
+    ...(gameQ ? { title: { contains: gameQ, mode: "insensitive" as const } } : {})
+  };
+  const shouldSearchGames = gameQ.length > 0;
 
   const [games, gameTotal, tables] = await Promise.all([
-    prisma.game.findMany({
-      where: gameWhere,
-      orderBy: { title: "asc" },
-      skip: (page - 1) * GAME_PICKER_SIZE,
-      take: GAME_PICKER_SIZE
-    }),
-    prisma.game.count({ where: gameWhere }),
+    shouldSearchGames
+      ? prisma.game.findMany({
+          where: gameWhere,
+          orderBy: { title: "asc" },
+          skip: (page - 1) * GAME_PICKER_SIZE,
+          take: GAME_PICKER_SIZE
+        })
+      : Promise.resolve([]),
+    shouldSearchGames ? prisma.game.count({ where: gameWhere }) : Promise.resolve(0),
     prisma.gameTable.findMany({ orderBy: { capacity: "asc" } })
   ]);
 
@@ -91,7 +103,7 @@ export default async function NewMeetupPage({ searchParams }: NewMeetupPageProps
           <div className="wide game-picker">
             <div className="section-heading">
               <h2>게임 선택</h2>
-              <span>{gameTotal}개 검색됨</span>
+              <span>{shouldSearchGames ? `${gameTotal}개 검색됨` : "검색 후 선택"}</span>
             </div>
             <label className="game-choice empty-choice">
               <input type="radio" name="gameId" value="" defaultChecked />
@@ -113,6 +125,10 @@ export default async function NewMeetupPage({ searchParams }: NewMeetupPageProps
                 </span>
               </label>
             ))}
+            {!shouldSearchGames ? <p className="empty">게임명을 검색하면 대여 가능한 게임만 표시됩니다.</p> : null}
+            {shouldSearchGames && games.length === 0 ? (
+              <p className="empty">대여 중이거나 이미 예정된 약속이 있는 게임은 표시되지 않습니다.</p>
+            ) : null}
           </div>
         </ActionForm>
 

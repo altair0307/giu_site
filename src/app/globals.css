@@ -265,6 +265,11 @@ h3 {
   flex-direction: row-reverse;
 }
 
+.admin-layout .side-column {
+  width: 440px;
+  flex: 0 0 440px;
+}
+
 .admin-game-list {
   gap: 10px;
 }

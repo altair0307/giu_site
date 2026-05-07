@@ -60,7 +60,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     prisma.game.findMany({
       where: q ? { title: { contains: q, mode: "insensitive" } } : {},
       orderBy: { title: "asc" },
-      take: 80
+      take: 20
     }),
     prisma.user.findMany({
       where: userQ
@@ -305,7 +305,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
           <div className="section-heading" id="game-edit">
             <h2>게임 수정</h2>
-            <span>최대 80개 표시</span>
+            <span>최대 20개 표시</span>
           </div>
           {gameNotice ? <p className="notice success-notice">{gameNotice}</p> : null}
           {gameError ? <p className="notice error-notice">{gameError}</p> : null}

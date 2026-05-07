@@ -150,7 +150,7 @@ function PhotoActionDialog({
               </label>
               {fileError ? <p className="error">{fileError}</p> : null}
               {note ? <p className="notice warning-notice modal-notice">{note}</p> : null}
-              <p className="form-note">JPG, PNG, WebP 형식으로 1MB 이하의 사진을 올려주세요.</p>
+              <p className="form-note">JPG, PNG, WebP 형식으로 8MB 이하의 사진을 올려주세요.</p>
               <div className="modal-actions">
                 <button className="ghost-button" type="button" onClick={() => setOpen(false)}>
                   취소

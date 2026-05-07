@@ -27,7 +27,8 @@ async function main() {
         note: row.note,
         genre: row.genre,
         isPresent: row.isPresent,
-        weight: row.weight
+        weight: row.weight,
+        infoUrl: row.infoUrl
       }))
     });
   });

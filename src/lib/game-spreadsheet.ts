@@ -7,9 +7,11 @@ export const GAME_HEADERS = [
   "시간(분)",
   "수량(개)",
   "비고",
+  "소유자(사용 안 함)",
   "장르",
   "존재 여부",
-  "난이도(웨이트)"
+  "난이도(웨이트)",
+  "보드게임 정보 사이트"
 ] as const;
 
 export type GameImportRow = {
@@ -22,6 +24,7 @@ export type GameImportRow = {
   genre: string | null;
   isPresent: boolean | null;
   weight: string | null;
+  infoUrl: string | null;
 };
 
 type ExportRow = GameImportRow & {
@@ -119,7 +122,8 @@ export async function parseGameWorkbook(buffer: Uint8Array) {
       note: nullableText(row.getCell(6).value),
       genre: nullableText(row.getCell(8).value),
       isPresent: presentValue(row.getCell(9).value),
-      weight: nullableWeight(row.getCell(10).value)
+      weight: nullableWeight(row.getCell(10).value),
+      infoUrl: nullableText(row.getCell(11).value)
     });
   });
 
@@ -139,9 +143,11 @@ export async function buildGameWorkbook(rows: ExportRow[]) {
       game.playTime ?? "",
       game.quantity ?? "",
       game.note ?? "",
+      "",
       game.genre ?? "",
       game.isPresent === null || game.isPresent === undefined ? "" : game.isPresent ? "ㅇ" : "x",
-      game.weight ?? ""
+      game.weight ?? "",
+      game.infoUrl ?? ""
     ]);
   }
 
@@ -152,9 +158,11 @@ export async function buildGameWorkbook(rows: ExportRow[]) {
     { width: 12 },
     { width: 10 },
     { width: 24 },
+    { width: 16 },
     { width: 18 },
     { width: 12 },
-    { width: 16 }
+    { width: 16 },
+    { width: 36 }
   ];
 
   worksheet.getRow(1).font = { bold: true };
@@ -163,7 +171,7 @@ export async function buildGameWorkbook(rows: ExportRow[]) {
     pattern: "solid",
     fgColor: { argb: "FFD6EEF6" }
   };
-  worksheet.autoFilter = "A1:I1";
+  worksheet.autoFilter = "A1:K1";
   worksheet.views = [{ state: "frozen", ySplit: 1 }];
 
   return Buffer.from(await workbook.xlsx.writeBuffer());

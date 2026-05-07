@@ -72,7 +72,8 @@ export async function POST(request: NextRequest) {
         note: z.string().trim().max(1000, "비고는 1000자 이하여야 합니다.").optional(),
         genre: z.string().trim().max(120, "장르는 120자 이하여야 합니다.").optional(),
         isPresent: z.enum(["", "true", "false"]).optional(),
-        weight: z.string().trim().max(80, "웨이트는 80자 이하여야 합니다.").optional()
+        weight: z.string().trim().max(80, "웨이트는 80자 이하여야 합니다.").optional(),
+        infoUrl: z.string().trim().max(500, "정보 사이트 주소는 500자 이하여야 합니다.").optional()
       })
       .parse({
         id: value(formData, "id"),
@@ -84,7 +85,8 @@ export async function POST(request: NextRequest) {
         note: value(formData, "note") || undefined,
         genre: value(formData, "genre") || undefined,
         isPresent: value(formData, "isPresent") as "" | "true" | "false",
-        weight: value(formData, "weight") || undefined
+        weight: value(formData, "weight") || undefined,
+        infoUrl: value(formData, "infoUrl") || undefined
       });
 
     await prisma.game.update({
@@ -98,7 +100,8 @@ export async function POST(request: NextRequest) {
         note: parsed.note ?? null,
         genre: parsed.genre ?? null,
         isPresent: parsed.isPresent === "" || parsed.isPresent === undefined ? null : parsed.isPresent === "true",
-        weight: parsed.weight ?? null
+        weight: parsed.weight ?? null,
+        infoUrl: parsed.infoUrl ?? null
       }
     });
 

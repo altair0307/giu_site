@@ -197,6 +197,10 @@ h3 {
   margin-bottom: 12px;
 }
 
+.game-search-bar {
+  grid-template-columns: minmax(180px, 1.6fr) 150px repeat(3, minmax(92px, 0.8fr)) repeat(2, minmax(120px, 1fr)) auto;
+}
+
 .game-table,
 .admin-game-list {
   display: grid;
@@ -292,7 +296,7 @@ h3 {
 
 .admin-game-row {
   display: grid;
-  grid-template-columns: minmax(170px, 1.4fr) 90px 90px 90px 70px 110px 92px 80px 120px auto;
+  grid-template-columns: minmax(170px, 1.4fr) 90px 90px 90px 70px 110px 92px 80px minmax(150px, 1fr) 120px auto;
   gap: 10px;
   align-items: end;
   padding: 12px;

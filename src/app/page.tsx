@@ -12,6 +12,7 @@ import {
 } from "@/app/actions";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { matchesGameDetailFilters } from "@/lib/game-search";
 
 const PAGE_SIZE = 24;
 
@@ -26,6 +27,11 @@ type HomePageProps = {
   searchParams: Promise<{
     q?: string;
     status?: string;
+    playerCount?: string;
+    bestPlayerCount?: string;
+    playTime?: string;
+    genre?: string;
+    weight?: string;
     page?: string;
   }>;
 };
@@ -39,25 +45,45 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   const params = await searchParams;
   const q = (params.q ?? "").trim();
+  const playerCount = (params.playerCount ?? "").trim();
+  const bestPlayerCount = (params.bestPlayerCount ?? "").trim();
+  const playTime = (params.playTime ?? "").trim();
+  const genre = (params.genre ?? "").trim();
+  const weight = (params.weight ?? "").trim();
   const status: GameStatus | "ALL" =
     params.status === "BORROWED" || params.status === "AVAILABLE" ? params.status : "ALL";
   const page = Math.max(1, Number(params.page ?? "1") || 1);
+  const detailFilters = {
+    playerCount,
+    bestPlayerCount,
+    playTime,
+    genre,
+    weight
+  };
 
   const gameWhere: Prisma.GameWhereInput = {
     ...(q ? { title: { contains: q, mode: "insensitive" as const } } : {}),
     ...(status !== "ALL" ? { status } : {})
   };
 
-  const [games, gameTotal, availableCount, pendingLoanRequestCount, meetups] = await Promise.all([
+  const [gameRows, availableCount, pendingLoanRequestCount, meetups] = await Promise.all([
     prisma.game.findMany({
       where: gameWhere,
       orderBy: [{ status: "asc" }, { title: "asc" }],
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-      include: {
+      select: {
+        id: true,
+        title: true,
+        players: true,
+        bestPlayers: true,
+        playTime: true,
+        genre: true,
+        weight: true,
+        status: true,
         loans: {
           where: { status: "ACTIVE" },
-          include: {
+          select: {
+            id: true,
+            dueAt: true,
             borrower: {
               select: { id: true, name: true, loginId: true }
             },
@@ -66,6 +92,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 type: "RETURN",
                 status: "PENDING"
               },
+              select: { id: true },
               orderBy: { requestedAt: "asc" },
               take: 1
             }
@@ -76,7 +103,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             type: "BORROW",
             status: "PENDING"
           },
-          include: {
+          select: {
+            id: true,
             requester: {
               select: { id: true, name: true, loginId: true }
             }
@@ -86,7 +114,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         }
       }
     }),
-    prisma.game.count({ where: gameWhere }),
     prisma.game.count({ where: { status: "AVAILABLE" } }),
     prisma.loanRequest.count({ where: { status: "PENDING" } }),
     prisma.meetup.findMany({
@@ -107,7 +134,24 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     })
   ]);
 
+  const filteredGames = gameRows.filter((game) => matchesGameDetailFilters(game, detailFilters));
+  const gameTotal = filteredGames.length;
+  const games = filteredGames.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const totalPages = Math.max(1, Math.ceil(gameTotal / PAGE_SIZE));
+  const pageHref = (targetPage: number) => {
+    const hrefParams = new URLSearchParams();
+
+    if (q) hrefParams.set("q", q);
+    if (status !== "ALL") hrefParams.set("status", status);
+    if (playerCount) hrefParams.set("playerCount", playerCount);
+    if (bestPlayerCount) hrefParams.set("bestPlayerCount", bestPlayerCount);
+    if (playTime) hrefParams.set("playTime", playTime);
+    if (genre) hrefParams.set("genre", genre);
+    if (weight) hrefParams.set("weight", weight);
+    hrefParams.set("page", String(targetPage));
+
+    return `/?${hrefParams.toString()}`;
+  };
 
   return (
     <main className="app-shell">
@@ -158,13 +202,18 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               <span>페이지 {page}/{totalPages}</span>
             </div>
 
-            <form className="filter-bar">
+            <form className="filter-bar game-search-bar">
               <input name="q" defaultValue={q} placeholder="게임명 검색" />
               <select name="status" defaultValue={status}>
                 <option value="ALL">전체 상태</option>
                 <option value="AVAILABLE">대여 가능</option>
                 <option value="BORROWED">대여 중</option>
               </select>
+              <input name="playerCount" type="number" min="1" defaultValue={playerCount} placeholder="인원" />
+              <input name="bestPlayerCount" type="number" min="1" defaultValue={bestPlayerCount} placeholder="베스트 인원" />
+              <input name="playTime" type="number" min="1" defaultValue={playTime} placeholder="시간(분)" />
+              <input name="genre" defaultValue={genre} placeholder="장르" />
+              <input name="weight" defaultValue={weight} placeholder="웨이트" />
               <button className="secondary-button">검색</button>
             </form>
 
@@ -227,13 +276,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <div className="pager">
               <Link
                 className={page <= 1 ? "pager-link disabled" : "pager-link"}
-                href={`/?q=${encodeURIComponent(q)}&status=${status}&page=${Math.max(1, page - 1)}`}
+                href={pageHref(Math.max(1, page - 1))}
               >
                 이전
               </Link>
               <Link
                 className={page >= totalPages ? "pager-link disabled" : "pager-link"}
-                href={`/?q=${encodeURIComponent(q)}&status=${status}&page=${Math.min(totalPages, page + 1)}`}
+                href={pageHref(Math.min(totalPages, page + 1))}
               >
                 다음
               </Link>

@@ -184,7 +184,8 @@ export async function addGameAction(_: ActionState, formData: FormData): Promise
         note: z.string().trim().max(300).optional(),
         genre: z.string().trim().max(80).optional(),
         isPresent: z.enum(["", "true", "false"]).optional(),
-        weight: z.string().trim().max(40).optional()
+        weight: z.string().trim().max(40).optional(),
+        infoUrl: z.string().trim().max(500).optional()
       })
       .parse({
         title: value(formData, "title"),
@@ -195,7 +196,8 @@ export async function addGameAction(_: ActionState, formData: FormData): Promise
         note: value(formData, "note") || undefined,
         genre: value(formData, "genre") || undefined,
         isPresent: value(formData, "isPresent") as "" | "true" | "false",
-        weight: value(formData, "weight") || undefined
+        weight: value(formData, "weight") || undefined,
+        infoUrl: value(formData, "infoUrl") || undefined
       });
 
     await prisma.game.create({
@@ -439,7 +441,8 @@ export async function updateGameAction(_: ActionState, formData: FormData): Prom
         note: z.string().trim().max(300).optional(),
         genre: z.string().trim().max(80).optional(),
         isPresent: z.enum(["", "true", "false"]).optional(),
-        weight: z.string().trim().max(40).optional()
+        weight: z.string().trim().max(40).optional(),
+        infoUrl: z.string().trim().max(500).optional()
       })
       .parse({
         id: value(formData, "id"),
@@ -451,7 +454,8 @@ export async function updateGameAction(_: ActionState, formData: FormData): Prom
         note: value(formData, "note") || undefined,
         genre: value(formData, "genre") || undefined,
         isPresent: value(formData, "isPresent") as "" | "true" | "false",
-        weight: value(formData, "weight") || undefined
+        weight: value(formData, "weight") || undefined,
+        infoUrl: value(formData, "infoUrl") || undefined
       });
 
     await prisma.game.update({
@@ -465,7 +469,8 @@ export async function updateGameAction(_: ActionState, formData: FormData): Prom
         note: parsed.note ?? null,
         genre: parsed.genre ?? null,
         isPresent: parsed.isPresent === "" || parsed.isPresent === undefined ? null : parsed.isPresent === "true",
-        weight: parsed.weight ?? null
+        weight: parsed.weight ?? null,
+        infoUrl: parsed.infoUrl ?? null
       }
     });
 
@@ -627,7 +632,8 @@ export async function importGamesAction(_: ActionState, formData: FormData): Pro
           note: row.note,
           genre: row.genre,
           isPresent: row.isPresent,
-          weight: row.weight
+          weight: row.weight,
+          infoUrl: row.infoUrl
         }))
       });
     });

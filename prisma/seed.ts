@@ -50,7 +50,8 @@ async function main() {
         note: null,
         genre: null,
         isPresent: true,
-        weight: "2"
+        weight: "2",
+        infoUrl: null
     },
     {
         title: "뱅!",
@@ -61,7 +62,8 @@ async function main() {
         note: null,
         genre: null,
         isPresent: true,
-        weight: "2"
+        weight: "2",
+        infoUrl: null
     },
     {
         title: "카탄",
@@ -72,7 +74,8 @@ async function main() {
         note: null,
         genre: null,
         isPresent: true,
-        weight: "3"
+        weight: "3",
+        infoUrl: null
     }
   ];
 

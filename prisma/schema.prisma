@@ -76,6 +76,7 @@ model Game {
   genre        String?
   isPresent    Boolean?
   weight       String?
+  infoUrl      String?
   status       GameStatus    @default(AVAILABLE)
   createdAt    DateTime      @default(now())
   loans        Loan[]

@@ -170,6 +170,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <input name="weight" placeholder="1.28" />
             </label>
             <label className="wide">
+              보드게임 정보 사이트
+              <input name="infoUrl" type="url" placeholder="https://..." />
+            </label>
+            <label className="wide">
               비고
               <input name="note" />
             </label>
@@ -350,6 +354,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 <label>
                   웨이트
                   <input name="weight" defaultValue={game.weight ?? ""} />
+                </label>
+                <label>
+                  정보 사이트
+                  <input name="infoUrl" type="url" defaultValue={game.infoUrl ?? ""} />
                 </label>
                 <label>
                   비고

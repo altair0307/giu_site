@@ -20,19 +20,26 @@ function safeReturnTo(raw: string) {
   return raw.startsWith("/admin") ? raw : "/admin";
 }
 
-function redirectWithStatus(request: NextRequest, returnTo: string, params: Record<string, string>) {
+function redirectTo(location: string) {
+  return new NextResponse(null, {
+    status: 303,
+    headers: { Location: location }
+  });
+}
+
+function redirectWithStatus(returnTo: string, params: Record<string, string>) {
   const [pathAndQuery, hash = ""] = safeReturnTo(returnTo).split("#");
-  const url = new URL(pathAndQuery, request.url);
+  const [pathname, query = ""] = pathAndQuery.split("?");
+  const searchParams = new URLSearchParams(query);
 
   for (const [key, paramValue] of Object.entries(params)) {
-    url.searchParams.set(key, paramValue);
+    searchParams.set(key, paramValue);
   }
 
-  if (hash) {
-    url.hash = hash;
-  }
+  const queryString = searchParams.toString();
+  const location = `${pathname}${queryString ? `?${queryString}` : ""}${hash ? `#${hash}` : ""}`;
 
-  return NextResponse.redirect(url);
+  return redirectTo(location);
 }
 
 export async function POST(request: NextRequest) {
@@ -43,13 +50,13 @@ export async function POST(request: NextRequest) {
     const user = await getCurrentUser();
 
     if (!user) {
-      return NextResponse.redirect(new URL("/login", request.url));
+      return redirectTo("/login");
     }
 
     assertRateLimit(`update-game:${user.id}`, 30, 60_000);
 
     if (user.role !== "ADMIN") {
-      return redirectWithStatus(request, returnTo, {
+      return redirectWithStatus(returnTo, {
         gameError: "관리자만 게임을 수정할 수 있습니다."
       });
     }
@@ -95,11 +102,11 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    return redirectWithStatus(request, returnTo, {
+    return redirectWithStatus(returnTo, {
       gameNotice: "게임 정보를 수정했습니다."
     });
   } catch (error) {
-    return redirectWithStatus(request, returnTo, {
+    return redirectWithStatus(returnTo, {
       gameError: actionError(error, "게임 수정에 실패했습니다.")
     });
   }

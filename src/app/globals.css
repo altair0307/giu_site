@@ -265,6 +265,72 @@ h3 {
   flex-direction: row-reverse;
 }
 
+.admin-topbar {
+  margin-bottom: 16px;
+}
+
+.admin-nav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.admin-nav-link {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 14px;
+  background: var(--surface);
+  color: var(--muted);
+  text-decoration: none;
+  box-shadow: 0 8px 22px rgba(31, 42, 50, 0.05);
+}
+
+.admin-nav-link:hover {
+  border-color: rgba(33, 92, 85, 0.28);
+  color: var(--primary);
+}
+
+.admin-page {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-form-page {
+  width: min(760px, 100%);
+}
+
+.admin-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-summary-card {
+  display: grid;
+  gap: 8px;
+  min-height: 108px;
+  align-content: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  box-shadow: var(--shadow);
+}
+
+.admin-summary-card span {
+  color: var(--muted);
+}
+
+.admin-summary-card strong {
+  font-size: 30px;
+}
+
 .admin-layout .side-column {
   width: 440px;
   flex: 0 0 440px;
@@ -301,7 +367,7 @@ h3 {
 
 .admin-game-row {
   display: grid;
-  grid-template-columns: repeat(8, minmax(80px, 1fr)) auto;
+  grid-template-columns: repeat(8, minmax(84px, 1fr)) auto;
   gap: 10px;
   align-items: end;
   padding: 12px;
@@ -691,6 +757,10 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
+  .admin-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .filter-bar,
   .game-table-head,
   .game-row,
@@ -728,6 +798,10 @@ textarea:focus {
   .section-heading {
     align-items: flex-start;
     display: grid;
+  }
+
+  .admin-summary-grid {
+    grid-template-columns: 1fr;
   }
 
   .form-grid {

@@ -44,7 +44,7 @@ function redirectWithStatus(returnTo: string, params: Record<string, string>) {
 
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
-  const returnTo = value(formData, "returnTo") || "/admin#game-edit";
+  const returnTo = value(formData, "returnTo") || "/admin/games#game-edit";
 
   try {
     const user = await getCurrentUser();

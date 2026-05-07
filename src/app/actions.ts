@@ -208,6 +208,7 @@ export async function addGameAction(_: ActionState, formData: FormData): Promise
     });
     revalidatePath("/");
     revalidatePath("/admin");
+    revalidatePath("/admin/games");
     return { ok: true, message: "게임을 추가했습니다." };
   } catch (error) {
     return { message: actionError(error, "게임 추가에 실패했습니다.") };
@@ -527,6 +528,7 @@ export async function updateUserAction(_: ActionState, formData: FormData): Prom
     });
 
     revalidatePath("/admin");
+    revalidatePath("/admin/users");
     return { ok: true, message: "회원 정보를 수정했습니다." };
   } catch (error) {
     return { message: actionError(error, "회원 정보 수정에 실패했습니다.") };
@@ -561,7 +563,8 @@ export async function resetUserPasswordAction(formData: FormData) {
 
   await prisma.session.deleteMany({ where: { userId: targetUserId } });
   revalidatePath("/admin");
-  redirect("/admin?notice=password-reset");
+  revalidatePath("/admin/users");
+  redirect("/admin/users?notice=password-reset");
 }
 
 export async function deleteUserAction(formData: FormData) {
@@ -585,7 +588,8 @@ export async function deleteUserAction(formData: FormData) {
 
   await prisma.user.delete({ where: { id: targetUserId } });
   revalidatePath("/admin");
-  redirect("/admin?notice=user-deleted");
+  revalidatePath("/admin/users");
+  redirect("/admin/users?notice=user-deleted");
 }
 
 export async function importGamesAction(_: ActionState, formData: FormData): Promise<ActionState> {
@@ -640,6 +644,7 @@ export async function importGamesAction(_: ActionState, formData: FormData): Pro
 
     revalidatePath("/");
     revalidatePath("/admin");
+    revalidatePath("/admin/games");
     return { ok: true, message: `${rows.length}개 게임을 반영했습니다.` };
   } catch (error) {
     return { message: actionError(error, "게임 DB 업로드에 실패했습니다.") };

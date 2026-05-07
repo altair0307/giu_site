@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { deleteUserAction, logoutAction } from "@/app/actions";
+import { deleteUserAction } from "@/app/actions";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
@@ -38,22 +38,7 @@ export default async function DeleteUserPage({ params }: DeleteUserPageProps) {
   const isSelf = targetUser.id === currentUser.id;
 
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">Admin</p>
-          <h1>사용자 삭제</h1>
-        </div>
-        <div className="account-box">
-          <Link className="ghost-link" href="/admin">
-            관리자 화면
-          </Link>
-          <form action={logoutAction}>
-            <button className="ghost-button">로그아웃</button>
-          </form>
-        </div>
-      </header>
-
+    <section className="admin-page">
       <section className="panel delete-panel">
         <h2>{targetUser.name}</h2>
         <p className="muted">
@@ -75,13 +60,13 @@ export default async function DeleteUserPage({ params }: DeleteUserPageProps) {
             </label>
             <div className="danger-actions">
               <button className="danger-button">사용자 삭제</button>
-              <Link className="ghost-link" href="/admin">
+              <Link className="ghost-link" href="/admin/users">
                 취소
               </Link>
             </div>
           </form>
         )}
       </section>
-    </main>
+    </section>
   );
 }

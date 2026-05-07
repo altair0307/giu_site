@@ -33,6 +33,11 @@ enum LoanRequestStatus {
   REJECTED
 }
 
+enum LoanPhotoType {
+  BORROW
+  RETURN
+}
+
 model User {
   id                   String              @id @default(cuid())
   loginId              String              @unique
@@ -106,6 +111,7 @@ model Loan {
   game       Game          @relation(fields: [gameId], references: [id], onDelete: Cascade)
   borrower   User          @relation(fields: [borrowerId], references: [id], onDelete: Cascade)
   requests   LoanRequest[]
+  photos     LoanPhoto[]
 
   @@index([status])
   @@index([borrowerId])
@@ -126,6 +132,7 @@ model LoanRequest {
   loan        Loan?             @relation(fields: [loanId], references: [id], onDelete: Cascade)
   requester   User              @relation("LoanRequestRequester", fields: [requesterId], references: [id], onDelete: Cascade)
   reviewer    User?             @relation("LoanRequestReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  photos      LoanPhoto[]
 
   @@index([status])
   @@index([type])
@@ -133,6 +140,23 @@ model LoanRequest {
   @@index([loanId])
   @@index([requesterId])
   @@index([reviewerId])
+}
+
+model LoanPhoto {
+  id            String        @id @default(cuid())
+  type          LoanPhotoType
+  loanId        String
+  loanRequestId String?
+  contentType   String
+  size          Int
+  data          Bytes
+  createdAt     DateTime      @default(now())
+  loan          Loan          @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  loanRequest   LoanRequest?  @relation(fields: [loanRequestId], references: [id], onDelete: SetNull)
+
+  @@index([loanId])
+  @@index([loanRequestId])
+  @@index([type])
 }
 
 model Meetup {

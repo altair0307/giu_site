@@ -18,8 +18,17 @@ export default async function AdminPage() {
         requester: { select: { name: true, loginId: true, studentId: true } },
         loan: {
           include: {
-            borrower: { select: { name: true, loginId: true, studentId: true } }
+            borrower: { select: { name: true, loginId: true, studentId: true } },
+            photos: {
+              where: { type: "RETURN" },
+              orderBy: { createdAt: "desc" },
+              take: 1
+            }
           }
+        },
+        photos: {
+          orderBy: { createdAt: "desc" },
+          take: 1
         }
       },
       orderBy: { requestedAt: "asc" },
@@ -71,6 +80,15 @@ export default async function AdminPage() {
                     ? ` · 대여자 ${request.loan.borrower.name} · 반납 예정 ${dateFormatter.format(request.loan.dueAt)}`
                     : ""}
                 </p>
+                {request.photos[0] || request.loan?.photos[0] ? (
+                  <a className="photo-preview-link" href={`/loan-photos/${request.photos[0]?.id ?? request.loan?.photos[0]?.id}`} target="_blank">
+                    <img
+                      alt={`${request.game.title} ${request.type === "RETURN" ? "반납" : "대여"} 사진`}
+                      src={`/loan-photos/${request.photos[0]?.id ?? request.loan?.photos[0]?.id}`}
+                    />
+                    <span>업로드 사진 확인</span>
+                  </a>
+                ) : null}
               </div>
               <div className="row-actions">
                 <form action={approveLoanRequestAction}>

@@ -23,6 +23,8 @@ const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
   minute: "2-digit"
 });
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 type HomePageProps = {
   searchParams: Promise<{
     q?: string;
@@ -66,7 +68,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     ...(status !== "ALL" ? { status } : {})
   };
 
-  const [gameRows, availableCount, pendingLoanRequestCount, meetups] = await Promise.all([
+  const now = new Date();
+  const [gameRows, availableCount, pendingLoanRequestCount, meetups, myActiveLoans] = await Promise.all([
     prisma.game.findMany({
       where: gameWhere,
       orderBy: [{ status: "asc" }, { title: "asc" }],
@@ -131,6 +134,19 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       },
       orderBy: { startsAt: "asc" },
       take: 12
+    }),
+    prisma.loan.findMany({
+      where: {
+        borrowerId: user.id,
+        status: "ACTIVE"
+      },
+      include: {
+        game: {
+          select: { title: true }
+        }
+      },
+      orderBy: { dueAt: "asc" },
+      take: 12
     })
   ]);
 
@@ -138,6 +154,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const gameTotal = filteredGames.length;
   const games = filteredGames.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const totalPages = Math.max(1, Math.ceil(gameTotal / PAGE_SIZE));
+  const urgentLoans = myActiveLoans.filter((loan) => loan.dueAt.getTime() - now.getTime() <= DAY_MS);
   const pageHref = (targetPage: number) => {
     const hrefParams = new URLSearchParams();
 
@@ -193,6 +210,22 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <strong>{meetups.length}</strong>
         </div>
       </section>
+
+      {urgentLoans.length > 0 ? (
+        <section className="loan-alert-list">
+          {urgentLoans.map((loan) => {
+            const overdue = loan.dueAt.getTime() < now.getTime();
+
+            return (
+              <p className={overdue ? "notice error-notice" : "notice warning-notice"} key={loan.id}>
+                {overdue
+                  ? `${loan.game.title} 반납 기한이 지났습니다. 가능한 빨리 반납 사진을 올려주세요.`
+                  : `${loan.game.title} 반납 기한이 하루 이내입니다. 반납 예정: ${dateFormatter.format(loan.dueAt)}`}
+              </p>
+            );
+          })}
+        </section>
+      ) : null}
 
       <section className="content-grid">
         <div className="main-column">
@@ -251,14 +284,22 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                             : `${activeLoan?.borrower.name ?? "회원"} 대여 중`}
                     </span>
                     {game.status === "AVAILABLE" && !pendingBorrowRequest ? (
-                      <form action={borrowGameAction}>
+                      <form action={borrowGameAction} className="photo-action-form">
                         <input type="hidden" name="gameId" value={game.id} />
-                        <button className="secondary-button">대여 요청</button>
+                        <label>
+                          대여 사진
+                          <input name="photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" required />
+                        </label>
+                        <button className="secondary-button">사진 업로드 후 대여</button>
                       </form>
                     ) : canReturn && activeLoan ? (
-                      <form action={returnGameAction}>
+                      <form action={returnGameAction} className="photo-action-form">
                         <input type="hidden" name="loanId" value={activeLoan.id} />
-                        <button className="secondary-button">반납 요청</button>
+                        <label>
+                          반납 사진
+                          <input name="photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" required />
+                        </label>
+                        <button className="secondary-button">반납 승인 요청</button>
                       </form>
                     ) : pendingBorrowRequest ? (
                       <span className="muted">관리자 승인 대기</span>

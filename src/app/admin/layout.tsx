@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth";
 
 const adminLinks = [
   { href: "/admin", label: "승인 대기" },
+  { href: "/admin/loans", label: "대여 관리" },
   { href: "/admin/users", label: "회원 관리" },
   { href: "/admin/meetups", label: "약속 관리" },
   { href: "/admin/games", label: "게임 수정" },

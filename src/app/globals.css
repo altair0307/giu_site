@@ -11,6 +11,7 @@
   --green: #16794d;
   --amber: #a85d1b;
   --danger: #b3261e;
+  --warning: #8a5a00;
   --shadow: 0 16px 40px rgba(31, 42, 50, 0.08);
 }
 
@@ -210,7 +211,7 @@ h3 {
 .game-table-head,
 .game-row {
   display: grid;
-  grid-template-columns: minmax(160px, 1.4fr) minmax(190px, 1.3fr) minmax(140px, 1fr) minmax(90px, auto);
+  grid-template-columns: minmax(160px, 1.2fr) minmax(190px, 1.3fr) minmax(140px, 0.9fr) minmax(220px, auto);
   gap: 12px;
   align-items: center;
   padding: 16px;
@@ -599,6 +600,23 @@ textarea:focus {
   margin-bottom: 28px;
 }
 
+.admin-loan-list {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-loan-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
 .admin-meetup-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -613,6 +631,68 @@ textarea:focus {
 
 .admin-meetup-row p {
   margin-bottom: 0;
+}
+
+.loan-alert-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.loan-alert-list .notice {
+  margin-bottom: 0;
+}
+
+.warning-notice {
+  border: 1px solid rgba(138, 90, 0, 0.25);
+  background: rgba(138, 90, 0, 0.08);
+  color: var(--warning);
+}
+
+.photo-action-form {
+  display: grid;
+  gap: 8px;
+  width: min(260px, 100%);
+}
+
+.photo-action-form label {
+  font-size: 12px;
+}
+
+.photo-action-form input[type="file"] {
+  min-height: 40px;
+  padding: 8px;
+  font-size: 12px;
+}
+
+.loan-photo-grid {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.photo-preview-link {
+  width: 132px;
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.photo-preview-link img {
+  width: 132px;
+  height: 88px;
+  display: block;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.photo-preview-link span {
+  font-weight: 800;
 }
 
 .manage-layout {
@@ -768,6 +848,7 @@ textarea:focus {
   .admin-user-row,
   .admin-user-edit,
   .admin-meetup-row,
+  .admin-loan-row,
   .manage-layout,
   .meetup-create-layout {
     grid-template-columns: 1fr;

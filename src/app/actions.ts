@@ -18,6 +18,8 @@ const loginIdSchema = z
   .regex(/^[a-zA-Z0-9_-]+$/, "아이디는 영문, 숫자, _, -만 사용할 수 있습니다.");
 
 const passwordSchema = z.string().min(8, "비밀번호는 8자 이상이어야 합니다.");
+const MAX_LOAN_PHOTO_SIZE = 1024 * 1024;
+const ALLOWED_LOAN_PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export type ActionState = {
   ok?: boolean;
@@ -34,6 +36,28 @@ function actionError(error: unknown, fallback: string) {
   }
 
   return error instanceof Error ? error.message : fallback;
+}
+
+async function readLoanPhoto(formData: FormData) {
+  const file = formData.get("photo");
+
+  if (!(file instanceof File) || file.size === 0) {
+    throw new Error("사진을 업로드해주세요.");
+  }
+
+  if (!ALLOWED_LOAN_PHOTO_TYPES.has(file.type)) {
+    throw new Error("사진은 JPG, PNG, WebP 형식만 업로드할 수 있습니다.");
+  }
+
+  if (file.size > MAX_LOAN_PHOTO_SIZE) {
+    throw new Error("사진은 1MB 이하로 업로드해주세요.");
+  }
+
+  return {
+    contentType: file.type,
+    size: file.size,
+    data: Buffer.from(await file.arrayBuffer())
+  };
 }
 
 export async function registerAction(_: ActionState, formData: FormData): Promise<ActionState> {
@@ -220,6 +244,8 @@ export async function borrowGameAction(formData: FormData) {
   assertRateLimit(`borrow:${user.id}`, 12, 60_000);
 
   const gameId = value(formData, "gameId");
+  const photo = await readLoanPhoto(formData);
+  const now = new Date();
 
   await prisma.$transaction(async (tx) => {
     const game = await tx.game.findUnique({ where: { id: gameId } });
@@ -240,17 +266,47 @@ export async function borrowGameAction(formData: FormData) {
       throw new Error("이미 대여 승인 대기 중인 게임입니다.");
     }
 
-    await tx.loanRequest.create({
+    const request = await tx.loanRequest.create({
       data: {
         type: "BORROW",
+        status: "APPROVED",
         gameId,
-        requesterId: user.id
+        requesterId: user.id,
+        reviewedAt: now
       }
+    });
+
+    const loan = await tx.loan.create({
+      data: {
+        gameId,
+        borrowerId: user.id,
+        dueAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      }
+    });
+
+    await tx.loanPhoto.create({
+      data: {
+        type: "BORROW",
+        loanId: loan.id,
+        loanRequestId: request.id,
+        ...photo
+      }
+    });
+
+    await tx.loanRequest.update({
+      where: { id: request.id },
+      data: { loanId: loan.id }
+    });
+
+    await tx.game.update({
+      where: { id: gameId },
+      data: { status: "BORROWED" }
     });
   });
 
   revalidatePath("/");
   revalidatePath("/admin");
+  revalidatePath("/admin/loans");
 }
 
 export async function returnGameAction(formData: FormData) {
@@ -258,6 +314,7 @@ export async function returnGameAction(formData: FormData) {
   assertRateLimit(`return:${user.id}`, 12, 60_000);
 
   const loanId = value(formData, "loanId");
+  const photo = await readLoanPhoto(formData);
   const activeLoan = await prisma.loan.findUnique({
     where: { id: loanId },
     include: { game: true }
@@ -283,17 +340,29 @@ export async function returnGameAction(formData: FormData) {
     throw new Error("이미 반납 승인 대기 중인 대여 기록입니다.");
   }
 
-  await prisma.loanRequest.create({
-    data: {
-      type: "RETURN",
-      gameId: activeLoan.gameId,
-      loanId,
-      requesterId: user.id
-    }
+  await prisma.$transaction(async (tx) => {
+    const request = await tx.loanRequest.create({
+      data: {
+        type: "RETURN",
+        gameId: activeLoan.gameId,
+        loanId,
+        requesterId: user.id
+      }
+    });
+
+    await tx.loanPhoto.create({
+      data: {
+        type: "RETURN",
+        loanId,
+        loanRequestId: request.id,
+        ...photo
+      }
+    });
   });
 
   revalidatePath("/");
   revalidatePath("/admin");
+  revalidatePath("/admin/loans");
 }
 
 export async function approveLoanRequestAction(formData: FormData) {
@@ -392,6 +461,7 @@ export async function approveLoanRequestAction(formData: FormData) {
 
   revalidatePath("/");
   revalidatePath("/admin");
+  revalidatePath("/admin/loans");
 }
 
 export async function rejectLoanRequestAction(formData: FormData) {
@@ -420,6 +490,42 @@ export async function rejectLoanRequestAction(formData: FormData) {
 
   revalidatePath("/");
   revalidatePath("/admin");
+  revalidatePath("/admin/loans");
+}
+
+export async function deleteLoanAction(formData: FormData) {
+  const user = await requireUser();
+  assertRateLimit(`delete-loan:${user.id}`, 20, 60_000);
+
+  if (user.role !== "ADMIN") {
+    throw new Error("관리자만 대여 기록을 삭제할 수 있습니다.");
+  }
+
+  const loanId = value(formData, "loanId");
+  const loan = await prisma.loan.findUnique({
+    where: { id: loanId },
+    select: { id: true, gameId: true, status: true }
+  });
+
+  if (!loan) {
+    throw new Error("삭제할 대여 기록을 찾을 수 없습니다.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.loan.delete({ where: { id: loan.id } });
+
+    if (loan.status === "ACTIVE") {
+      await tx.game.update({
+        where: { id: loan.gameId },
+        data: { status: "AVAILABLE" }
+      });
+    }
+  });
+
+  revalidatePath("/");
+  revalidatePath("/admin");
+  revalidatePath("/admin/loans");
+  redirect("/admin/loans?notice=loan-deleted");
 }
 
 export async function updateGameAction(_: ActionState, formData: FormData): Promise<ActionState> {

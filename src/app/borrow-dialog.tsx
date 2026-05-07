@@ -139,7 +139,7 @@ function PhotoActionDialog({
                     if (file.size > MAX_PHOTO_SIZE) {
                       event.currentTarget.value = "";
                       setHasPhoto(false);
-                      setFileError("사진은 1MB 이하로 업로드해주세요.");
+                      setFileError("사진은 8MB 이하로 업로드해주세요.");
                       return;
                     }
 

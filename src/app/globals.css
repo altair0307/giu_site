@@ -47,6 +47,10 @@ button:disabled {
   opacity: 0.55;
 }
 
+body.modal-open {
+  overflow: hidden;
+}
+
 a {
   color: var(--primary);
   font-weight: 700;
@@ -663,6 +667,70 @@ textarea:focus {
   min-height: 40px;
   padding: 8px;
   font-size: 12px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(31, 42, 50, 0.48);
+}
+
+.borrow-modal {
+  width: min(480px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 24px 70px rgba(31, 42, 50, 0.24);
+}
+
+.modal-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--line);
+  padding: 18px;
+}
+
+.modal-heading h2 {
+  line-height: 1.25;
+}
+
+.modal-close-button {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.borrow-modal-form {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+}
+
+.borrow-modal-form input[type="file"] {
+  min-height: 48px;
+  padding: 10px;
+}
+
+.modal-actions {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+  margin-top: 4px;
 }
 
 .loan-photo-grid {

@@ -1,0 +1,8 @@
+node_modules
+.next
+.git
+next-dev.out.log
+next-dev.err.log
+next-start.out.log
+next-start.err.log
+npm-debug.log

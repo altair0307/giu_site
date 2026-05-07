@@ -2,14 +2,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { GameStatus, Prisma } from "@prisma/client";
 import {
-  borrowGameAction,
   cancelMeetupAction,
   completeMeetupAction,
   joinMeetupAction,
   leaveMeetupAction,
   logoutAction,
-  returnGameAction
 } from "@/app/actions";
+import { BorrowDialog, ReturnDialog } from "@/app/borrow-dialog";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { matchesGameDetailFilters } from "@/lib/game-search";
@@ -284,23 +283,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                             : `${activeLoan?.borrower.name ?? "회원"} 대여 중`}
                     </span>
                     {game.status === "AVAILABLE" && !pendingBorrowRequest ? (
-                      <form action={borrowGameAction} className="photo-action-form">
-                        <input type="hidden" name="gameId" value={game.id} />
-                        <label>
-                          대여 사진
-                          <input name="photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" required />
-                        </label>
-                        <button className="secondary-button">사진 업로드 후 대여</button>
-                      </form>
+                      <BorrowDialog gameId={game.id} gameTitle={game.title} />
                     ) : canReturn && activeLoan ? (
-                      <form action={returnGameAction} className="photo-action-form">
-                        <input type="hidden" name="loanId" value={activeLoan.id} />
-                        <label>
-                          반납 사진
-                          <input name="photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" required />
-                        </label>
-                        <button className="secondary-button">반납 승인 요청</button>
-                      </form>
+                      <ReturnDialog loanId={activeLoan.id} gameTitle={game.title} />
                     ) : pendingBorrowRequest ? (
                       <span className="muted">관리자 승인 대기</span>
                     ) : pendingReturnRequest ? (

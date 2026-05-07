@@ -319,7 +319,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <form action="/admin/games/update" method="post" className="admin-game-row" key={game.id}>
                 <input type="hidden" name="id" value={game.id} />
                 <input type="hidden" name="returnTo" value={gameEditReturnTo} />
-                <label>
+                <label className="admin-game-title">
                   게임명
                   <input name="title" defaultValue={game.title} required />
                 </label>
@@ -355,11 +355,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   웨이트
                   <input name="weight" defaultValue={game.weight ?? ""} />
                 </label>
-                <label>
+                <label className="admin-game-info-url">
                   정보 사이트
                   <input name="infoUrl" type="url" defaultValue={game.infoUrl ?? ""} />
                 </label>
-                <label>
+                <label className="admin-game-note">
                   비고
                   <input name="note" defaultValue={game.note ?? ""} />
                 </label>

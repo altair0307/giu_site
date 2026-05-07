@@ -296,10 +296,22 @@ h3 {
 
 .admin-game-row {
   display: grid;
-  grid-template-columns: minmax(170px, 1.4fr) 90px 90px 90px 70px 110px 92px 80px minmax(150px, 1fr) 120px auto;
+  grid-template-columns: repeat(8, minmax(80px, 1fr)) auto;
   gap: 10px;
   align-items: end;
   padding: 12px;
+}
+
+.admin-game-title {
+  grid-column: span 2;
+}
+
+.admin-game-info-url {
+  grid-column: span 3;
+}
+
+.admin-game-note {
+  grid-column: span 2;
 }
 
 .meetup-row p {
@@ -688,6 +700,12 @@ textarea:focus {
 
   .finder-panel {
     position: static;
+  }
+
+  .admin-game-title,
+  .admin-game-info-url,
+  .admin-game-note {
+    grid-column: auto;
   }
 
   .game-table-head {

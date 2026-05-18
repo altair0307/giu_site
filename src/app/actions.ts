@@ -722,17 +722,6 @@ export async function importGamesAction(_: ActionState, formData: FormData): Pro
       return { message: "관리자만 게임 DB를 업로드할 수 있습니다." };
     }
 
-    const [activeLoans, pendingLoanRequests] = await Promise.all([
-      prisma.loan.count({ where: { status: "ACTIVE" } }),
-      prisma.loanRequest.count({ where: { status: "PENDING" } })
-    ]);
-    if (activeLoans > 0) {
-      return { message: "대여 중인 게임이 있으면 전체 업로드를 할 수 없습니다. 먼저 반납 처리해주세요." };
-    }
-    if (pendingLoanRequests > 0) {
-      return { message: "승인 대기 중인 대여/반납 요청이 있으면 전체 업로드를 할 수 없습니다. 먼저 처리해주세요." };
-    }
-
     const file = formData.get("file");
     if (!(file instanceof File) || file.size === 0) {
       return { message: "업로드할 엑셀 파일을 선택해주세요." };
@@ -743,12 +732,38 @@ export async function importGamesAction(_: ActionState, formData: FormData): Pro
       return { message: "가져올 게임 데이터가 없습니다." };
     }
 
+    let createdCount = 0;
+    let updatedCount = 0;
+    let deletedCount = 0;
+    let keptCount = 0;
+
     await prisma.$transaction(async (tx) => {
-      await tx.meetup.updateMany({ data: { gameId: null } });
-      await tx.loan.deleteMany({});
-      await tx.game.deleteMany({});
-      await tx.game.createMany({
-        data: rows.map((row) => ({
+      const existingGames = await tx.game.findMany({
+        include: {
+          _count: {
+            select: {
+              loans: true,
+              loanRequests: true,
+              meetups: true
+            }
+          }
+        },
+        orderBy: { createdAt: "asc" }
+      });
+      const gamesByTitle = new Map<string, typeof existingGames>();
+
+      for (const game of existingGames) {
+        const key = game.title.trim().toLowerCase();
+        gamesByTitle.set(key, [...(gamesByTitle.get(key) ?? []), game]);
+      }
+
+      const matchedGameIds = new Set<string>();
+
+      for (const row of rows) {
+        const key = row.title.trim().toLowerCase();
+        const candidates = gamesByTitle.get(key) ?? [];
+        const existingGame = candidates.find((game) => !matchedGameIds.has(game.id));
+        const data = {
           title: row.title,
           players: row.players,
           bestPlayers: row.bestPlayers,
@@ -759,14 +774,58 @@ export async function importGamesAction(_: ActionState, formData: FormData): Pro
           isPresent: row.isPresent,
           weight: row.weight,
           infoUrl: row.infoUrl
-        }))
+        };
+
+        if (existingGame) {
+          await tx.game.update({
+            where: { id: existingGame.id },
+            data
+          });
+          matchedGameIds.add(existingGame.id);
+          updatedCount += 1;
+          continue;
+        }
+
+        const createdGame = await tx.game.create({ data });
+        matchedGameIds.add(createdGame.id);
+        createdCount += 1;
+      }
+
+      const obsoleteGames = existingGames.filter((game) => !matchedGameIds.has(game.id));
+
+      for (const game of obsoleteGames) {
+        const hasRelatedData = game._count.loans > 0 || game._count.loanRequests > 0 || game._count.meetups > 0;
+
+        if (hasRelatedData) {
+          keptCount += 1;
+          continue;
+        }
+
+        await tx.game.delete({
+          where: { id: game.id }
+        });
+        deletedCount += 1;
+      }
+
+      await tx.meetup.updateMany({
+        where: {
+          gameId: {
+            notIn: Array.from(matchedGameIds)
+          }
+        },
+        data: { gameId: null }
       });
     });
 
     revalidatePath("/");
     revalidatePath("/admin");
     revalidatePath("/admin/games");
-    return { ok: true, message: `${rows.length}개 게임을 반영했습니다.` };
+    return {
+      ok: true,
+      message: `${rows.length}개 행을 반영했습니다. 수정 ${updatedCount}개, 추가 ${createdCount}개, 삭제 ${deletedCount}개${
+        keptCount > 0 ? `, 대여/기록 보존 ${keptCount}개` : ""
+      }.`
+    };
   } catch (error) {
     return { message: actionError(error, "게임 DB 업로드에 실패했습니다.") };
   }

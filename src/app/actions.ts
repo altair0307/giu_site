@@ -1,10 +1,12 @@
 "use server";
 
 import bcrypt from "bcryptjs";
+import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createSession, destroySession, requireUser } from "@/lib/auth";
+import { createLoanActivityLog, createMeetupActivityLog } from "@/lib/activity-log";
 import { prisma } from "@/lib/db";
 import { parseGameWorkbook } from "@/lib/game-spreadsheet";
 import { assertRateLimit } from "@/lib/rate-limit";
@@ -72,6 +74,23 @@ async function assertGameHasNoUpcomingMeetup(gameId: string, startsAt = new Date
   if (upcomingMeetup) {
     throw new Error("이미 예정된 약속이 있는 게임은 대여하거나 다른 약속에 선택할 수 없습니다.");
   }
+}
+
+async function findMeetupForLog(tx: Prisma.TransactionClient, meetupId: string) {
+  return tx.meetup.findUnique({
+    where: { id: meetupId },
+    include: {
+      game: { select: { title: true } },
+      table: { select: { name: true } },
+      host: { select: { name: true, loginId: true } },
+      participants: {
+        include: {
+          user: { select: { id: true, name: true, loginId: true, studentId: true } }
+        },
+        orderBy: { createdAt: "asc" }
+      }
+    }
+  });
 }
 
 export async function registerAction(_: ActionState, formData: FormData): Promise<ActionState> {
@@ -295,6 +314,7 @@ export async function borrowGameAction(formData: FormData) {
       data: {
         gameId,
         borrowerId: user.id,
+        borrowedAt: now,
         dueAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
       }
     });
@@ -317,11 +337,25 @@ export async function borrowGameAction(formData: FormData) {
       where: { id: gameId },
       data: { status: "BORROWED" }
     });
+
+    await createLoanActivityLog(tx, {
+      type: "BORROW",
+      loanId: loan.id,
+      gameId,
+      gameTitle: game.title,
+      borrowerId: user.id,
+      borrowerName: user.name,
+      borrowerLoginId: user.loginId,
+      borrowerStudentId: user.studentId,
+      occurredAt: now,
+      dueAt: loan.dueAt
+    });
   });
 
   revalidatePath("/");
   revalidatePath("/admin");
   revalidatePath("/admin/loans");
+  revalidatePath("/admin/logs");
 }
 
 export async function returnGameAction(formData: FormData) {
@@ -378,6 +412,7 @@ export async function returnGameAction(formData: FormData) {
   revalidatePath("/");
   revalidatePath("/admin");
   revalidatePath("/admin/loans");
+  revalidatePath("/admin/logs");
 }
 
 export async function approveLoanRequestAction(formData: FormData) {
@@ -394,7 +429,15 @@ export async function approveLoanRequestAction(formData: FormData) {
   await prisma.$transaction(async (tx) => {
     const request = await tx.loanRequest.findUnique({
       where: { id: requestId },
-      include: { game: true, loan: true }
+      include: {
+        game: true,
+        requester: { select: { id: true, name: true, loginId: true, studentId: true } },
+        loan: {
+          include: {
+            borrower: { select: { id: true, name: true, loginId: true, studentId: true } }
+          }
+        }
+      }
     });
 
     if (!request || request.status !== "PENDING") {
@@ -408,10 +451,11 @@ export async function approveLoanRequestAction(formData: FormData) {
         throw new Error("현재 대여 가능한 게임이 아닙니다.");
       }
 
-      await tx.loan.create({
+      const loan = await tx.loan.create({
         data: {
           gameId: request.gameId,
           borrowerId: request.requesterId,
+          borrowedAt: now,
           dueAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
         }
       });
@@ -433,6 +477,24 @@ export async function approveLoanRequestAction(formData: FormData) {
           reviewerId: user.id,
           reviewedAt: now
         }
+      });
+
+      await createLoanActivityLog(tx, {
+        type: "BORROW",
+        loanId: loan.id,
+        gameId: request.gameId,
+        gameTitle: request.game.title,
+        borrowerId: request.requester.id,
+        borrowerName: request.requester.name,
+        borrowerLoginId: request.requester.loginId,
+        borrowerStudentId: request.requester.studentId,
+        occurredAt: now,
+        dueAt: loan.dueAt
+      });
+
+      await tx.loanRequest.update({
+        where: { id: request.id },
+        data: { loanId: loan.id }
       });
     } else {
       if (!request.loanId || !request.loan || request.loan.status !== "ACTIVE") {
@@ -461,6 +523,19 @@ export async function approveLoanRequestAction(formData: FormData) {
           reviewerId: user.id,
           reviewedAt: now
         }
+      });
+
+      await createLoanActivityLog(tx, {
+        type: "RETURN",
+        loanId: request.loan.id,
+        gameId: request.gameId,
+        gameTitle: request.game.title,
+        borrowerId: request.loan.borrower.id,
+        borrowerName: request.loan.borrower.name,
+        borrowerLoginId: request.loan.borrower.loginId,
+        borrowerStudentId: request.loan.borrower.studentId,
+        occurredAt: now,
+        dueAt: request.loan.dueAt
       });
     }
 
@@ -541,6 +616,27 @@ export async function deleteLoanAction(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/admin/loans");
   redirect("/admin/loans?notice=loan-deleted");
+}
+
+export async function pruneActivityLogsAction(formData: FormData) {
+  const user = await requireUser();
+  assertRateLimit(`prune-activity-logs:${user.id}`, 4, 60_000);
+
+  if (user.role !== "ADMIN") {
+    throw new Error("관리자만 로그를 정리할 수 있습니다.");
+  }
+
+  const days = z.coerce.number().int().min(30).max(3650).parse(formData.get("days") ?? 365);
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  await prisma.$transaction([
+    prisma.loanActivityLog.deleteMany({ where: { occurredAt: { lt: cutoff } } }),
+    prisma.meetupActivityLog.deleteMany({ where: { occurredAt: { lt: cutoff } } })
+  ]);
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/logs");
+  redirect(`/admin/logs?notice=logs-pruned&days=${days}`);
 }
 
 export async function updateGameAction(_: ActionState, formData: FormData): Promise<ActionState> {
@@ -882,22 +978,33 @@ export async function createMeetupAction(_: ActionState, formData: FormData): Pr
       }
     }
 
-    const meetup = await prisma.meetup.create({
-      data: {
-        ...parsed,
-        hostId: user.id
-      }
-    });
+    await prisma.$transaction(async (tx) => {
+      const meetup = await tx.meetup.create({
+        data: {
+          ...parsed,
+          hostId: user.id
+        }
+      });
 
-    await prisma.meetupParticipant.create({
-      data: {
-        meetupId: meetup.id,
-        userId: user.id
+      await tx.meetupParticipant.create({
+        data: {
+          meetupId: meetup.id,
+          userId: user.id
+        }
+      });
+
+      const meetupForLog = await findMeetupForLog(tx, meetup.id);
+
+      if (!meetupForLog) {
+        throw new Error("약속 로그를 생성할 수 없습니다.");
       }
+
+      await createMeetupActivityLog(tx, "SCHEDULED", meetupForLog, new Date());
     });
 
     revalidatePath("/");
     revalidatePath("/admin");
+    revalidatePath("/admin/logs");
     return { ok: true, message: "게임 약속을 만들었습니다." };
   } catch (error) {
     return { message: actionError(error, "약속 생성에 실패했습니다.") };
@@ -928,9 +1035,19 @@ export async function cancelMeetupAction(formData: FormData) {
   const { user } = await requireMeetupManager(meetupId);
   assertRateLimit(`cancel-meetup:${user.id}`, 20, 60_000);
 
-  await prisma.meetup.delete({ where: { id: meetupId } });
+  await prisma.$transaction(async (tx) => {
+    const meetupForLog = await findMeetupForLog(tx, meetupId);
+
+    if (!meetupForLog) {
+      throw new Error("약속을 찾을 수 없습니다.");
+    }
+
+    await createMeetupActivityLog(tx, "CANCELED", meetupForLog, new Date());
+    await tx.meetup.delete({ where: { id: meetupId } });
+  });
   revalidatePath("/");
   revalidatePath("/admin");
+  revalidatePath("/admin/logs");
   redirect(returnTo);
 }
 
@@ -940,9 +1057,19 @@ export async function completeMeetupAction(formData: FormData) {
   const { user } = await requireMeetupManager(meetupId);
   assertRateLimit(`complete-meetup:${user.id}`, 20, 60_000);
 
-  await prisma.meetup.delete({ where: { id: meetupId } });
+  await prisma.$transaction(async (tx) => {
+    const meetupForLog = await findMeetupForLog(tx, meetupId);
+
+    if (!meetupForLog) {
+      throw new Error("약속을 찾을 수 없습니다.");
+    }
+
+    await createMeetupActivityLog(tx, "COMPLETED", meetupForLog, new Date());
+    await tx.meetup.delete({ where: { id: meetupId } });
+  });
   revalidatePath("/");
   revalidatePath("/admin");
+  revalidatePath("/admin/logs");
   redirect(returnTo);
 }
 

@@ -38,6 +38,17 @@ enum LoanPhotoType {
   RETURN
 }
 
+enum LoanActivityType {
+  BORROW
+  RETURN
+}
+
+enum MeetupActivityType {
+  SCHEDULED
+  COMPLETED
+  CANCELED
+}
+
 model User {
   id                   String              @id @default(cuid())
   loginId              String              @unique
@@ -159,6 +170,26 @@ model LoanPhoto {
   @@index([type])
 }
 
+model LoanActivityLog {
+  id              String           @id @default(cuid())
+  type            LoanActivityType
+  loanId          String?
+  gameId          String?
+  gameTitle       String
+  borrowerId      String?
+  borrowerName    String
+  borrowerLoginId String?
+  borrowerStudentId String?
+  occurredAt      DateTime
+  dueAt           DateTime?
+  createdAt       DateTime         @default(now())
+
+  @@index([type])
+  @@index([occurredAt])
+  @@index([gameId])
+  @@index([borrowerId])
+}
+
 model Meetup {
   id           String              @id @default(cuid())
   title        String
@@ -189,4 +220,31 @@ model MeetupParticipant {
 
   @@unique([meetupId, userId])
   @@index([userId])
+}
+
+model MeetupActivityLog {
+  id           String             @id @default(cuid())
+  type         MeetupActivityType
+  meetupId     String?
+  title        String
+  description  String?
+  startsAt     DateTime
+  maxPeople    Int
+  gameId       String?
+  gameTitle    String?
+  tableId      String?
+  tableName    String?
+  hostId       String?
+  hostName     String
+  hostLoginId  String?
+  participants Json
+  participantCount Int
+  occurredAt   DateTime
+  createdAt    DateTime           @default(now())
+
+  @@index([type])
+  @@index([startsAt])
+  @@index([occurredAt])
+  @@index([gameId])
+  @@index([hostId])
 }

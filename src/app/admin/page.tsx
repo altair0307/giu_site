@@ -10,7 +10,7 @@ const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
 });
 
 export default async function AdminPage() {
-  const [loanRequests, userCount, gameCount, meetupCount] = await Promise.all([
+  const [loanRequests, userCount, gameCount, meetupCount, activityLogCount] = await Promise.all([
     prisma.loanRequest.findMany({
       where: { status: "PENDING" },
       include: {
@@ -36,7 +36,8 @@ export default async function AdminPage() {
     }),
     prisma.user.count(),
     prisma.game.count(),
-    prisma.meetup.count({ where: { startsAt: { gte: new Date() } } })
+    prisma.meetup.count({ where: { startsAt: { gte: new Date() } } }),
+    Promise.all([prisma.loanActivityLog.count(), prisma.meetupActivityLog.count()]).then(([loanCount, meetupLogCount]) => loanCount + meetupLogCount)
   ]);
 
   return (
@@ -53,6 +54,10 @@ export default async function AdminPage() {
         <Link className="admin-summary-card" href="/admin/meetups">
           <span>예정 약속</span>
           <strong>{meetupCount}</strong>
+        </Link>
+        <Link className="admin-summary-card" href="/admin/logs">
+          <span>운영 로그</span>
+          <strong>{activityLogCount}</strong>
         </Link>
         <Link className="admin-summary-card" href="/admin">
           <span>승인 대기</span>

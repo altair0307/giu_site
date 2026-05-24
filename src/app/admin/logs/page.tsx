@@ -108,6 +108,24 @@ export default async function AdminActivityLogsPage({ searchParams }: ActivityLo
         </form>
       </section>
 
+      <section className="panel log-maintenance">
+        <div>
+          <h2>로그 다운로드</h2>
+          <p className="muted">엑셀에서 바로 열 수 있는 CSV 파일로 운영 로그를 내려받습니다.</p>
+        </div>
+        <div className="row-actions">
+          <a className="secondary-link" href="/admin/logs/export">
+            전체 CSV
+          </a>
+          <a className="ghost-link" href="/admin/logs/export?kind=loans">
+            대여/반납 CSV
+          </a>
+          <a className="ghost-link" href="/admin/logs/export?kind=meetups">
+            약속 CSV
+          </a>
+        </div>
+      </section>
+
       <section className="section-block">
         <div className="section-heading">
           <h2>대여/반납 로그</h2>

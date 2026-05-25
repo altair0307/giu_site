@@ -49,6 +49,20 @@ enum MeetupActivityType {
   CANCELED
 }
 
+enum NotificationType {
+  RETURN_REQUESTED
+  LOAN_OVERDUE
+}
+
+enum NotificationChannel {
+  DISCORD
+}
+
+enum NotificationStatus {
+  SENT
+  FAILED
+}
+
 model User {
   id                   String              @id @default(cuid())
   loginId              String              @unique
@@ -247,4 +261,29 @@ model MeetupActivityLog {
   @@index([occurredAt])
   @@index([gameId])
   @@index([hostId])
+}
+
+model NotificationLog {
+  id            String              @id @default(cuid())
+  type          NotificationType
+  channel       NotificationChannel
+  status        NotificationStatus
+  dedupeKey     String              @unique
+  loanId        String?
+  loanRequestId String?
+  userId        String?
+  title         String
+  message       String
+  errorMessage  String?
+  sentAt        DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([type])
+  @@index([channel])
+  @@index([status])
+  @@index([loanId])
+  @@index([loanRequestId])
+  @@index([userId])
+  @@index([createdAt])
 }

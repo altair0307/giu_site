@@ -9,6 +9,7 @@ import { createSession, destroySession, requireUser } from "@/lib/auth";
 import { createLoanActivityLog, createMeetupActivityLog } from "@/lib/activity-log";
 import { prisma } from "@/lib/db";
 import { parseGameWorkbook } from "@/lib/game-spreadsheet";
+import { notifyReturnRequested } from "@/lib/notifications";
 import { assertRateLimit } from "@/lib/rate-limit";
 import { getClientKey } from "@/lib/request";
 
@@ -389,7 +390,7 @@ export async function returnGameAction(formData: FormData) {
     throw new Error("이미 반납 승인 대기 중인 대여 기록입니다.");
   }
 
-  await prisma.$transaction(async (tx) => {
+  const returnRequest = await prisma.$transaction(async (tx) => {
     const request = await tx.loanRequest.create({
       data: {
         type: "RETURN",
@@ -407,6 +408,20 @@ export async function returnGameAction(formData: FormData) {
         ...photo
       }
     });
+
+    return request;
+  });
+
+  await notifyReturnRequested({
+    loanId,
+    loanRequestId: returnRequest.id,
+    gameTitle: activeLoan.game.title,
+    borrowerName: user.name,
+    borrowerLoginId: user.loginId,
+    borrowerStudentId: user.studentId,
+    dueAt: activeLoan.dueAt,
+    requestedAt: returnRequest.requestedAt,
+    userId: user.id
   });
 
   revalidatePath("/");

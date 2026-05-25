@@ -17,6 +17,7 @@ npm install
 ```env
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public"
 SESSION_SECRET="change-this-to-a-long-random-secret"
+DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
 ```
 
 3. DB 마이그레이션
@@ -79,6 +80,21 @@ npm run db:seed
 
 4. Railway 배포 로그에서 `prisma generate`와 `next build`가 성공했는지 확인합니다.
 5. 배포 URL에 접속해서 관리자 계정으로 로그인합니다.
+
+## Discord 알림 설정
+
+반납 요청 알림과 반납 지연 알림은 Discord Webhook으로 발송합니다.
+
+1. Discord에서 알림을 받을 채널을 만들고 Webhook URL을 복사합니다.
+2. Railway 서비스 환경변수에 `DISCORD_WEBHOOK_URL`을 추가합니다.
+3. 반납 요청 알림은 사용자가 반납 요청을 올릴 때 즉시 발송됩니다.
+4. 반납 지연 알림은 Railway Cron 서비스에서 아래 명령을 실행하도록 설정합니다.
+
+```bash
+npm run notify:loans
+```
+
+Railway Cron은 UTC 기준입니다. 매일 오전 10시 KST에 실행하려면 `0 1 * * *`로 설정합니다.
 
 ## 보드게임 엑셀 양식
 

@@ -10,7 +10,8 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
-    "db:import-games": "tsx scripts/import-games.ts"
+    "db:import-games": "tsx scripts/import-games.ts",
+    "notify:loans": "tsx scripts/notify-loans.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

@@ -18,6 +18,7 @@ type AdminLoansPageProps = {
 export default async function AdminLoansPage({ searchParams }: AdminLoansPageProps) {
   const params = await searchParams;
   const loans = await prisma.loan.findMany({
+    where: { status: "ACTIVE" },
     include: {
       game: true,
       borrower: {
@@ -35,7 +36,7 @@ export default async function AdminLoansPage({ searchParams }: AdminLoansPagePro
         take: 3
       }
     },
-    orderBy: [{ status: "asc" }, { borrowedAt: "desc" }],
+    orderBy: { borrowedAt: "desc" },
     take: 120
   });
 
@@ -60,9 +61,7 @@ export default async function AdminLoansPage({ searchParams }: AdminLoansPagePro
                 <p className="muted">
                   {loan.borrower.name}({loan.borrower.loginId}
                   {loan.borrower.studentId ? ` · ${loan.borrower.studentId}` : ""}) ·{" "}
-                  {loan.status === "ACTIVE" ? "대여 중" : "반납 완료"} · 대여 {dateFormatter.format(loan.borrowedAt)} · 반납 예정{" "}
-                  {dateFormatter.format(loan.dueAt)}
-                  {loan.returnedAt ? ` · 반납 ${dateFormatter.format(loan.returnedAt)}` : ""}
+                  대여 중 · 대여 {dateFormatter.format(loan.borrowedAt)} · 반납 예정 {dateFormatter.format(loan.dueAt)}
                 </p>
 
                 <div className="loan-photo-grid">

@@ -501,28 +501,9 @@ export async function approveLoanRequestAction(formData: FormData) {
         throw new Error("반납 승인 가능한 대여 기록이 아닙니다.");
       }
 
-      await tx.loan.update({
-        where: { id: request.loanId },
-        data: { status: "RETURNED", returnedAt: now }
-      });
-
       await tx.game.update({
         where: { id: request.gameId },
         data: { status: "AVAILABLE" }
-      });
-
-      await tx.loanRequest.updateMany({
-        where: {
-          id: { not: request.id },
-          loanId: request.loanId,
-          type: "RETURN",
-          status: "PENDING"
-        },
-        data: {
-          status: "REJECTED",
-          reviewerId: user.id,
-          reviewedAt: now
-        }
       });
 
       await createLoanActivityLog(tx, {
@@ -537,21 +518,28 @@ export async function approveLoanRequestAction(formData: FormData) {
         occurredAt: now,
         dueAt: request.loan.dueAt
       });
+
+      await tx.loan.delete({
+        where: { id: request.loanId }
+      });
     }
 
-    await tx.loanRequest.update({
-      where: { id: request.id },
-      data: {
-        status: "APPROVED",
-        reviewerId: user.id,
-        reviewedAt: now
-      }
-    });
+    if (request.type === "BORROW") {
+      await tx.loanRequest.update({
+        where: { id: request.id },
+        data: {
+          status: "APPROVED",
+          reviewerId: user.id,
+          reviewedAt: now
+        }
+      });
+    }
   });
 
   revalidatePath("/");
   revalidatePath("/admin");
   revalidatePath("/admin/loans");
+  revalidatePath("/admin/logs");
 }
 
 export async function rejectLoanRequestAction(formData: FormData) {

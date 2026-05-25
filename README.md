@@ -95,6 +95,7 @@ npm run notify:loans
 ```
 
 Railway Cron은 UTC 기준입니다. 매일 오전 10시 KST에 실행하려면 `0 1 * * *`로 설정합니다.
+Cron 전용 서비스를 같은 저장소로 만들 때는 Config file path를 `/railway.notify-loans.json`로 지정하면 위 명령과 스케줄이 함께 적용됩니다.
 
 ## 보드게임 엑셀 양식
 

@@ -1,5 +1,7 @@
 node_modules
 .next
+.tools
+.npm-cache
 .env
 .env*.local
 dist

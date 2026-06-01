@@ -1,6 +1,8 @@
 node_modules
 .next
 .git
+.tools
+.npm-cache
 next-dev.out.log
 next-dev.err.log
 next-start.out.log

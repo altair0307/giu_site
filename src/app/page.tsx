@@ -203,6 +203,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               관리자
             </Link>
           ) : null}
+          <Link className="ghost-link" href="/account">
+            내 페이지
+          </Link>
           <form action={logoutAction}>
             <button className="ghost-button">로그아웃</button>
           </form>

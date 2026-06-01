@@ -426,6 +426,12 @@ h3 {
   color: var(--amber);
 }
 
+.badge.red {
+  border-color: rgba(179, 38, 30, 0.25);
+  background: rgba(179, 38, 30, 0.08);
+  color: var(--danger);
+}
+
 .meetup-list {
   display: grid;
   gap: 12px;
@@ -607,6 +613,39 @@ textarea:focus {
 .admin-loan-list {
   display: grid;
   gap: 12px;
+}
+
+.account-loan-list {
+  display: grid;
+  gap: 12px;
+}
+
+.account-loan-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.account-loan-row p {
+  margin-bottom: 0;
+}
+
+.account-loan-detail {
+  margin-top: 6px;
+}
+
+.account-empty {
+  margin: 0;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
 }
 
 .admin-loan-row {
@@ -953,6 +992,7 @@ textarea:focus {
   .admin-user-edit,
   .admin-meetup-row,
   .admin-loan-row,
+  .account-loan-row,
   .log-maintenance,
   .manage-layout,
   .meetup-create-layout {

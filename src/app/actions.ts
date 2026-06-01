@@ -354,6 +354,7 @@ export async function borrowGameAction(formData: FormData) {
   });
 
   revalidatePath("/");
+  revalidatePath("/account");
   revalidatePath("/admin");
   revalidatePath("/admin/loans");
   revalidatePath("/admin/logs");
@@ -425,6 +426,7 @@ export async function returnGameAction(formData: FormData) {
   });
 
   revalidatePath("/");
+  revalidatePath("/account");
   revalidatePath("/admin");
   revalidatePath("/admin/loans");
   revalidatePath("/admin/logs");
@@ -552,6 +554,7 @@ export async function approveLoanRequestAction(formData: FormData) {
   });
 
   revalidatePath("/");
+  revalidatePath("/account");
   revalidatePath("/admin");
   revalidatePath("/admin/loans");
   revalidatePath("/admin/logs");
@@ -582,6 +585,7 @@ export async function rejectLoanRequestAction(formData: FormData) {
   }
 
   revalidatePath("/");
+  revalidatePath("/account");
   revalidatePath("/admin");
   revalidatePath("/admin/loans");
 }
@@ -616,6 +620,7 @@ export async function deleteLoanAction(formData: FormData) {
   });
 
   revalidatePath("/");
+  revalidatePath("/account");
   revalidatePath("/admin");
   revalidatePath("/admin/loans");
   redirect("/admin/loans?notice=loan-deleted");

@@ -2,8 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { GameStatus, Prisma } from "@prisma/client";
 import {
-  cancelMeetupAction,
-  completeMeetupAction,
   joinMeetupAction,
   leaveMeetupAction,
   logoutAction,

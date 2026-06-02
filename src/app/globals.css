@@ -821,6 +821,30 @@ textarea:focus {
   white-space: pre-line;
 }
 
+.announcement-popup-list {
+  display: grid;
+  gap: 14px;
+  max-height: min(52vh, 520px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.announcement-popup-item {
+  display: grid;
+  gap: 6px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 14px;
+}
+
+.announcement-popup-item:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.announcement-popup-item h3 {
+  line-height: 1.35;
+}
+
 .announcement-hide-option {
   color: var(--text);
 }

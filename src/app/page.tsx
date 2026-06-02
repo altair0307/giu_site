@@ -73,7 +73,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   };
 
   const now = new Date();
-  const [gameRows, availableCount, pendingLoanRequestCount, meetups, myActiveLoans, announcement] = await Promise.all([
+  const [gameRows, availableCount, pendingLoanRequestCount, meetups, myActiveLoans, announcements] = await Promise.all([
     prisma.game.findMany({
       where: gameWhere,
       orderBy: [{ status: "asc" }, { title: "asc" }],
@@ -172,12 +172,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       orderBy: { dueAt: "asc" },
       take: 12
     }),
-    prisma.announcement.findFirst({
+    prisma.announcement.findMany({
       where: {
         isActive: true,
         publishedAt: { lte: now }
       },
       orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+      take: 10,
       select: {
         id: true,
         title: true,
@@ -210,15 +211,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   return (
     <main className="app-shell">
       <AnnouncementPopup
-        announcement={
-          announcement
-            ? {
-                ...announcement,
-                publishedAt: announcement.publishedAt.toISOString(),
-                publishedAtLabel: announcementDateFormatter.format(announcement.publishedAt)
-              }
-            : null
-        }
+        announcements={announcements.map((announcement) => ({
+          ...announcement,
+          publishedAt: announcement.publishedAt.toISOString(),
+          publishedAtLabel: announcementDateFormatter.format(announcement.publishedAt)
+        }))}
       />
       <header className="topbar">
         <div>

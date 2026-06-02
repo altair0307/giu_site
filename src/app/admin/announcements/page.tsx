@@ -42,7 +42,7 @@ export default async function AdminAnnouncementsPage({ searchParams }: AdminAnno
         </div>
         <div className="admin-summary-card">
           <span>팝업 기준</span>
-          <strong>{activeCount > 0 ? "최신" : "-"}</strong>
+          <strong>{activeCount > 0 ? "전체" : "-"}</strong>
         </div>
       </div>
 

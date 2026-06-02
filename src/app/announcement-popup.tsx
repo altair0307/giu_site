@@ -3,33 +3,34 @@
 import { useEffect, useId, useState } from "react";
 
 type AnnouncementPopupProps = {
-  announcement: {
+  announcements: {
     id: string;
     title: string;
     body: string;
     publishedAt: string;
     publishedAtLabel: string;
-  } | null;
+  }[];
 };
 
-export function AnnouncementPopup({ announcement }: AnnouncementPopupProps) {
+export function AnnouncementPopup({ announcements }: AnnouncementPopupProps) {
   const [open, setOpen] = useState(false);
   const [hideForDay, setHideForDay] = useState(false);
   const titleId = useId();
+  const announcementKey = announcements.map((announcement) => announcement.id).join(":");
 
   useEffect(() => {
-    if (!announcement) {
+    if (announcements.length === 0 || !announcementKey) {
       return;
     }
 
-    const storageKey = `announcement:${announcement.id}:hiddenUntil`;
+    const storageKey = `announcements:${announcementKey}:hiddenUntil`;
     const hiddenUntil = Number(window.localStorage.getItem(storageKey) ?? 0);
 
     if (!hiddenUntil || hiddenUntil <= Date.now()) {
       window.localStorage.removeItem(storageKey);
       setOpen(true);
     }
-  }, [announcement]);
+  }, [announcements.length, announcementKey]);
 
   useEffect(() => {
     if (!open) {
@@ -51,13 +52,13 @@ export function AnnouncementPopup({ announcement }: AnnouncementPopupProps) {
     };
   }, [open]);
 
-  if (!announcement || !open) {
+  if (announcements.length === 0 || !open) {
     return null;
   }
 
   const close = () => {
     if (hideForDay) {
-      window.localStorage.setItem(`announcement:${announcement.id}:hiddenUntil`, String(Date.now() + 24 * 60 * 60 * 1000));
+      window.localStorage.setItem(`announcements:${announcementKey}:hiddenUntil`, String(Date.now() + 24 * 60 * 60 * 1000));
     }
 
     setOpen(false);
@@ -75,17 +76,24 @@ export function AnnouncementPopup({ announcement }: AnnouncementPopupProps) {
         <div className="modal-heading">
           <div>
             <p className="eyebrow">Notice</p>
-            <h2 id={titleId}>{announcement.title}</h2>
+            <h2 id={titleId}>공지사항</h2>
           </div>
           <button className="modal-close-button" type="button" aria-label="공지 닫기" onClick={close}>
             ×
           </button>
         </div>
         <div className="announcement-content">
-          <time className="muted" dateTime={announcement.publishedAt}>
-            {announcement.publishedAtLabel}
-          </time>
-          <p>{announcement.body}</p>
+          <div className="announcement-popup-list">
+            {announcements.map((announcement) => (
+              <article className="announcement-popup-item" key={announcement.id}>
+                <time className="muted" dateTime={announcement.publishedAt}>
+                  {announcement.publishedAtLabel}
+                </time>
+                <h3>{announcement.title}</h3>
+                <p>{announcement.body}</p>
+              </article>
+            ))}
+          </div>
           <label className="checkbox-label announcement-hide-option">
             <input
               type="checkbox"

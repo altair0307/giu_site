@@ -8,6 +8,7 @@ const adminLinks = [
   { href: "/admin/logs", label: "운영 로그" },
   { href: "/admin/loans", label: "대여 관리" },
   { href: "/admin/users", label: "회원 관리" },
+  { href: "/admin/announcements", label: "공지 관리" },
   { href: "/admin/meetups", label: "약속 관리" },
   { href: "/admin/games", label: "게임 수정" },
   { href: "/admin/games/new", label: "게임 등록" },

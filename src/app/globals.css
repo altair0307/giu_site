@@ -500,6 +500,16 @@ textarea:focus {
   box-shadow: 0 0 0 3px rgba(33, 92, 85, 0.12);
 }
 
+.checkbox-label {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  justify-content: start;
+}
+
+.checkbox-label input {
+  width: auto;
+}
+
 .primary-button,
 .secondary-button,
 .ghost-button {
@@ -791,6 +801,60 @@ textarea:focus {
   margin-top: 4px;
 }
 
+.announcement-backdrop {
+  z-index: 60;
+}
+
+.announcement-modal {
+  width: min(560px, 100%);
+}
+
+.announcement-content {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.announcement-content p {
+  margin-bottom: 0;
+  line-height: 1.65;
+  white-space: pre-line;
+}
+
+.announcement-hide-option {
+  color: var(--text);
+}
+
+.announcement-admin-list {
+  display: grid;
+  gap: 14px;
+}
+
+.announcement-admin-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 14px;
+  align-items: start;
+}
+
+.announcement-admin-row .panel {
+  box-shadow: var(--shadow);
+}
+
+.announcement-admin-meta {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.announcement-admin-meta p {
+  margin-bottom: 0;
+}
+
 .loan-photo-grid {
   display: flex;
   gap: 10px;
@@ -993,6 +1057,7 @@ textarea:focus {
   .admin-meetup-row,
   .admin-loan-row,
   .account-loan-row,
+  .announcement-admin-row,
   .log-maintenance,
   .manage-layout,
   .meetup-create-layout {

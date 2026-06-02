@@ -43,7 +43,7 @@ export default async function AccountPage() {
         },
         orderBy: { requestedAt: "desc" },
         take: 1
-      }
+      },
     },
     orderBy: { dueAt: "asc" }
   });

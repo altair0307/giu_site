@@ -287,3 +287,16 @@ model NotificationLog {
   @@index([userId])
   @@index([createdAt])
 }
+
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  body        String
+  isActive    Boolean  @default(true)
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([publishedAt])
+}

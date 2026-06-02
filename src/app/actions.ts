@@ -647,6 +647,84 @@ export async function pruneActivityLogsAction(formData: FormData) {
   redirect(`/admin/logs?notice=logs-pruned&days=${days}`);
 }
 
+export async function saveAnnouncementAction(_: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    const user = await requireUser();
+    assertRateLimit(`save-announcement:${user.id}`, 12, 60_000);
+
+    if (user.role !== "ADMIN") {
+      return { message: "관리자만 공지를 수정할 수 있습니다." };
+    }
+
+    const publishedAtValue = value(formData, "publishedAt");
+    const parsed = z
+      .object({
+        id: z.string().optional(),
+        title: z.string().trim().min(1, "공지 제목을 입력해주세요.").max(80, "공지 제목은 80자 이하여야 합니다."),
+        body: z.string().trim().min(1, "공지 내용을 입력해주세요.").max(2000, "공지 내용은 2000자 이하여야 합니다."),
+        isActive: z.boolean(),
+        publishedAt: z.date()
+      })
+      .parse({
+        id: value(formData, "id") || undefined,
+        title: value(formData, "title"),
+        body: value(formData, "body"),
+        isActive: formData.get("isActive") === "on",
+        publishedAt: publishedAtValue ? new Date(publishedAtValue) : new Date()
+      });
+
+    if (Number.isNaN(parsed.publishedAt.getTime())) {
+      return { message: "게시일 형식이 올바르지 않습니다." };
+    }
+
+    if (parsed.id) {
+      await prisma.announcement.update({
+        where: { id: parsed.id },
+        data: {
+          title: parsed.title,
+          body: parsed.body,
+          isActive: parsed.isActive,
+          publishedAt: parsed.publishedAt
+        }
+      });
+    } else {
+      await prisma.announcement.create({
+        data: {
+          title: parsed.title,
+          body: parsed.body,
+          isActive: parsed.isActive,
+          publishedAt: parsed.publishedAt
+        }
+      });
+    }
+
+    revalidatePath("/");
+    revalidatePath("/account");
+    revalidatePath("/admin/announcements");
+    return { ok: true, message: parsed.id ? "공지사항을 수정했습니다." : "공지사항을 등록했습니다." };
+  } catch (error) {
+    return { message: actionError(error, "공지사항 저장에 실패했습니다.") };
+  }
+}
+
+export async function deleteAnnouncementAction(formData: FormData) {
+  const user = await requireUser();
+  assertRateLimit(`delete-announcement:${user.id}`, 12, 60_000);
+
+  if (user.role !== "ADMIN") {
+    throw new Error("관리자만 공지를 삭제할 수 있습니다.");
+  }
+
+  await prisma.announcement.delete({
+    where: { id: value(formData, "id") }
+  });
+
+  revalidatePath("/");
+  revalidatePath("/account");
+  revalidatePath("/admin/announcements");
+  redirect("/admin/announcements?notice=announcement-deleted");
+}
+
 export async function updateGameAction(_: ActionState, formData: FormData): Promise<ActionState> {
   try {
     const user = await requireUser();

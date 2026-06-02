@@ -6,6 +6,7 @@ import {
   leaveMeetupAction,
   logoutAction,
 } from "@/app/actions";
+import { AnnouncementPopup } from "@/app/announcement-popup";
 import { BorrowDialog, ReturnDialog } from "@/app/borrow-dialog";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -18,6 +19,12 @@ const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
   day: "numeric",
   hour: "2-digit",
   minute: "2-digit"
+});
+
+const announcementDateFormatter = new Intl.DateTimeFormat("ko-KR", {
+  year: "numeric",
+  month: "short",
+  day: "numeric"
 });
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -66,7 +73,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   };
 
   const now = new Date();
-  const [gameRows, availableCount, pendingLoanRequestCount, meetups, myActiveLoans] = await Promise.all([
+  const [gameRows, availableCount, pendingLoanRequestCount, meetups, myActiveLoans, announcement] = await Promise.all([
     prisma.game.findMany({
       where: gameWhere,
       orderBy: [{ status: "asc" }, { title: "asc" }],
@@ -164,6 +171,19 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       },
       orderBy: { dueAt: "asc" },
       take: 12
+    }),
+    prisma.announcement.findFirst({
+      where: {
+        isActive: true,
+        publishedAt: { lte: now }
+      },
+      orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        title: true,
+        body: true,
+        publishedAt: true
+      }
     })
   ]);
 
@@ -189,6 +209,17 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   return (
     <main className="app-shell">
+      <AnnouncementPopup
+        announcement={
+          announcement
+            ? {
+                ...announcement,
+                publishedAt: announcement.publishedAt.toISOString(),
+                publishedAtLabel: announcementDateFormatter.format(announcement.publishedAt)
+              }
+            : null
+        }
+      />
       <header className="topbar">
         <div>
           <p className="eyebrow">Club Room</p>

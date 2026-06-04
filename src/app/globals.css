@@ -134,6 +134,10 @@ h3 {
   margin-bottom: 24px;
 }
 
+.account-stats-grid {
+  grid-template-columns: repeat(5, 1fr);
+}
+
 .stat,
 .panel,
 .game-table,
@@ -235,6 +239,17 @@ h3 {
 .game-row strong,
 .game-row span {
   min-width: 0;
+}
+
+.game-info-cell {
+  display: grid;
+  gap: 4px;
+}
+
+.game-info-cell small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .pager {
@@ -650,6 +665,21 @@ textarea:focus {
   margin-top: 6px;
 }
 
+.account-rating-row {
+  align-items: start;
+}
+
+.account-rating-comment {
+  margin-top: 8px;
+  color: var(--text);
+  line-height: 1.55;
+}
+
+.account-rating-actions {
+  align-content: start;
+  align-items: center;
+}
+
 .account-empty {
   margin: 0;
   padding: 16px;
@@ -787,6 +817,61 @@ textarea:focus {
 .borrow-modal-form input[type="file"] {
   min-height: 48px;
   padding: 10px;
+}
+
+.rating-modal {
+  width: min(560px, 100%);
+}
+
+.rating-fieldset {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.rating-fieldset legend {
+  margin-bottom: 2px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.rating-score-options,
+.rating-tag-grid {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rating-score-choice,
+.rating-tag-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.rating-score-choice input,
+.rating-tag-choice input {
+  width: auto;
+}
+
+.rating-score-choice span {
+  color: var(--accent);
+  font-weight: 900;
+}
+
+.rating-played-label {
+  color: var(--text);
 }
 
 .modal-notice {
@@ -1065,6 +1150,10 @@ textarea:focus {
   }
 
   .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .account-stats-grid {
     grid-template-columns: 1fr;
   }
 

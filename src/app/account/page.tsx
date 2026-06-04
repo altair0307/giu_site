@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { logoutAction } from "@/app/actions";
 import { ReturnDialog } from "@/app/borrow-dialog";
+import { RatingDialog } from "@/app/rating-dialog";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { getRatingReasonLabel } from "@/lib/game-rating";
 
 const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
   month: "short",
@@ -16,37 +18,60 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export default async function AccountPage() {
   const user = await requireUser();
   const now = new Date();
-  const loans = await prisma.loan.findMany({
-    where: {
-      borrowerId: user.id,
-      status: "ACTIVE"
-    },
-    include: {
-      game: {
-        select: {
-          title: true,
-          players: true,
-          bestPlayers: true,
-          playTime: true,
-          genre: true,
-          weight: true
+  const [loans, ratings] = await Promise.all([
+    prisma.loan.findMany({
+      where: {
+        borrowerId: user.id,
+        status: "ACTIVE"
+      },
+      include: {
+        game: {
+          select: {
+            title: true,
+            players: true,
+            bestPlayers: true,
+            playTime: true,
+            genre: true,
+            weight: true
+          }
+        },
+        requests: {
+          where: {
+            type: "RETURN",
+            status: "PENDING"
+          },
+          select: {
+            id: true,
+            requestedAt: true
+          },
+          orderBy: { requestedAt: "desc" },
+          take: 1
+        },
+      },
+      orderBy: { dueAt: "asc" }
+    }),
+    prisma.gameRating.findMany({
+      where: {
+        userId: user.id,
+        isHidden: false
+      },
+      include: {
+        game: {
+          select: {
+            id: true,
+            title: true,
+            players: true,
+            bestPlayers: true,
+            playTime: true,
+            genre: true,
+            weight: true
+          }
         }
       },
-      requests: {
-        where: {
-          type: "RETURN",
-          status: "PENDING"
-        },
-        select: {
-          id: true,
-          requestedAt: true
-        },
-        orderBy: { requestedAt: "desc" },
-        take: 1
-      },
-    },
-    orderBy: { dueAt: "asc" }
-  });
+      orderBy: { updatedAt: "desc" },
+      take: 40
+    })
+  ]);
 
   const returnableLoans = loans.filter((loan) => loan.requests.length === 0);
   const pendingReturnLoans = loans.filter((loan) => loan.requests.length > 0);
@@ -97,6 +122,10 @@ export default async function AccountPage() {
         <div className="stat">
           <span>기한 임박/초과</span>
           <strong>{dueSoonCount + overdueCount}</strong>
+        </div>
+        <div className="stat">
+          <span>내 평점</span>
+          <strong>{ratings.length}</strong>
         </div>
       </section>
 
@@ -173,6 +202,59 @@ export default async function AccountPage() {
           </div>
         </section>
       ) : null}
+
+      <section className="section-block">
+        <div className="section-heading">
+          <h2>내가 매긴 평점</h2>
+          <span>{ratings.length}개</span>
+        </div>
+        <div className="account-loan-list">
+          {ratings.map((rating) => {
+            const details = [
+              rating.game.players,
+              rating.game.bestPlayers ? `베스트 ${rating.game.bestPlayers}` : "",
+              rating.game.playTime ? `${rating.game.playTime}분` : "",
+              rating.game.genre,
+              rating.game.weight ? `웨이트 ${rating.game.weight}` : ""
+            ]
+              .filter(Boolean)
+              .join(" · ");
+            const reasonLabels = rating.reasonTags.map(getRatingReasonLabel).join(", ");
+
+            return (
+              <article className="account-loan-row account-rating-row" key={rating.id}>
+                <div>
+                  <div className="card-header compact">
+                    <h3>{rating.game.title}</h3>
+                    <span className={rating.score >= 4 ? "badge green" : rating.score >= 3 ? "badge amber" : "badge red"}>
+                      {rating.score.toFixed(1)}점
+                    </span>
+                  </div>
+                  {details ? <p className="muted account-loan-detail">{details}</p> : null}
+                  <p className="participants">이유: {reasonLabels}</p>
+                  {rating.comment ? <p className="account-rating-comment">{rating.comment}</p> : null}
+                </div>
+                <div className="row-actions account-rating-actions">
+                  <span className="muted">수정 {dateFormatter.format(rating.updatedAt)}</span>
+                  <RatingDialog
+                    gameId={rating.game.id}
+                    gameTitle={rating.game.title}
+                    rating={{
+                      score: rating.score,
+                      playedStatus: rating.playedStatus,
+                      reasonTags: rating.reasonTags,
+                      comment: rating.comment
+                    }}
+                  />
+                </div>
+              </article>
+            );
+          })}
+          {ratings.length === 0 ? (
+            <p className="empty account-empty">아직 매긴 평점이 없습니다.</p>
+          ) : null}
+        </div>
+      </section>
     </main>
   );
 }

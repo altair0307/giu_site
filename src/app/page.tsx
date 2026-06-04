@@ -8,6 +8,7 @@ import {
 } from "@/app/actions";
 import { AnnouncementPopup } from "@/app/announcement-popup";
 import { BorrowDialog, ReturnDialog } from "@/app/borrow-dialog";
+import { RatingDialog } from "@/app/rating-dialog";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { matchesGameDetailFilters } from "@/lib/game-search";
@@ -128,6 +129,19 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             startsAt: true
           },
           orderBy: { startsAt: "asc" },
+          take: 1
+        },
+        ratings: {
+          where: {
+            userId: user.id,
+            isHidden: false
+          },
+          select: {
+            score: true,
+            playedStatus: true,
+            reasonTags: true,
+            comment: true
+          },
           take: 1
         }
       }
@@ -309,6 +323,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 const activeLoan = game.loans[0];
                 const pendingBorrowRequest = game.loanRequests[0];
                 const upcomingMeetup = game.meetups[0];
+                const myRating = game.ratings[0];
                 const pendingReturnRequest = activeLoan?.requests[0];
                 const canReturn =
                   activeLoan &&
@@ -318,10 +333,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 return (
                   <article className="game-row" key={game.id}>
                     <strong>{game.title}</strong>
-                    <span>
-                      {[game.players, game.bestPlayers ? `베스트 ${game.bestPlayers}` : "", game.playTime ? `${game.playTime}분` : "", game.genre, game.weight ? `웨이트 ${game.weight}` : ""]
-                        .filter(Boolean)
-                        .join(" · ")}
+                    <span className="game-info-cell">
+                      <span>
+                        {[game.players, game.bestPlayers ? `베스트 ${game.bestPlayers}` : "", game.playTime ? `${game.playTime}분` : "", game.genre, game.weight ? `웨이트 ${game.weight}` : ""]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                      {myRating ? <small>내 평점 {myRating.score.toFixed(1)}점</small> : null}
                     </span>
                     <span className={game.status === "AVAILABLE" && !upcomingMeetup ? "badge green" : "badge amber"}>
                       {game.status === "AVAILABLE" && pendingBorrowRequest
@@ -334,17 +352,20 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                             ? "반납 승인 대기"
                             : `${activeLoan?.borrower.name ?? "회원"} 대여 중`}
                     </span>
-                    {game.status === "AVAILABLE" && !pendingBorrowRequest && !upcomingMeetup ? (
-                      <BorrowDialog gameId={game.id} gameTitle={game.title} />
-                    ) : canReturn && activeLoan ? (
-                      <ReturnDialog loanId={activeLoan.id} gameTitle={game.title} />
-                    ) : pendingBorrowRequest ? (
-                      <span className="muted">관리자 승인 대기</span>
-                    ) : pendingReturnRequest ? (
-                      <span className="muted">반납 승인 대기</span>
-                    ) : (
-                      <span className="muted">반납 예정 {activeLoan ? dateFormatter.format(activeLoan.dueAt) : "-"}</span>
-                    )}
+                    <div className="row-actions">
+                      <RatingDialog gameId={game.id} gameTitle={game.title} rating={myRating ?? null} />
+                      {game.status === "AVAILABLE" && !pendingBorrowRequest && !upcomingMeetup ? (
+                        <BorrowDialog gameId={game.id} gameTitle={game.title} />
+                      ) : canReturn && activeLoan ? (
+                        <ReturnDialog loanId={activeLoan.id} gameTitle={game.title} />
+                      ) : pendingBorrowRequest ? (
+                        <span className="muted">관리자 승인 대기</span>
+                      ) : pendingReturnRequest ? (
+                        <span className="muted">반납 승인 대기</span>
+                      ) : (
+                        <span className="muted">반납 예정 {activeLoan ? dateFormatter.format(activeLoan.dueAt) : "-"}</span>
+                      )}
+                    </div>
                   </article>
                 );
               })}

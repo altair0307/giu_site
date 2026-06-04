@@ -49,6 +49,12 @@ enum MeetupActivityType {
   CANCELED
 }
 
+enum RatingPlayedStatus {
+  VERIFIED
+  SELF_REPORTED
+  UNVERIFIED
+}
+
 enum NotificationType {
   RETURN_REQUESTED
   LOAN_OVERDUE
@@ -75,6 +81,7 @@ model User {
   loans                Loan[]
   loanRequests         LoanRequest[]       @relation("LoanRequestRequester")
   reviewedLoanRequests LoanRequest[]       @relation("LoanRequestReviewer")
+  ratings              GameRating[]
   meetups              Meetup[]
   participants         MeetupParticipant[]
   sessions             Session[]
@@ -111,10 +118,33 @@ model Game {
   createdAt    DateTime      @default(now())
   loans        Loan[]
   loanRequests LoanRequest[]
+  ratings      GameRating[]
   meetups      Meetup[]
 
   @@index([status])
   @@index([title])
+}
+
+model GameRating {
+  id           String              @id @default(cuid())
+  gameId       String
+  userId       String
+  score        Float
+  playedStatus RatingPlayedStatus  @default(UNVERIFIED)
+  trustWeight  Float               @default(0.5)
+  reasonTags   String[]
+  comment      String?
+  isHidden     Boolean             @default(false)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  game         Game                @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([gameId, userId])
+  @@index([userId])
+  @@index([gameId])
+  @@index([playedStatus])
+  @@index([isHidden])
 }
 
 model GameTable {

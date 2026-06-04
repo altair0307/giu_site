@@ -8,6 +8,7 @@ import { z } from "zod";
 import { createSession, destroySession, requireUser } from "@/lib/auth";
 import { createGeneralActivityLog, createLoanActivityLog, createMeetupActivityLog } from "@/lib/activity-log";
 import { prisma } from "@/lib/db";
+import { NEGATIVE_RATING_REASON_VALUES, POSITIVE_RATING_REASON_VALUES, RATING_REASON_VALUES } from "@/lib/game-rating";
 import { parseGameWorkbook } from "@/lib/game-spreadsheet";
 import { notifyReturnRequested } from "@/lib/notifications";
 import { assertRateLimit } from "@/lib/rate-limit";
@@ -92,6 +93,38 @@ async function findMeetupForLog(tx: Prisma.TransactionClient, meetupId: string) 
       }
     }
   });
+}
+
+function calculateRatingTrustWeight({
+  verified,
+  selfReported,
+  reasonTagCount,
+  hasComment,
+  recentRatingCount
+}: {
+  verified: boolean;
+  selfReported: boolean;
+  reasonTagCount: number;
+  hasComment: boolean;
+  recentRatingCount: number;
+}) {
+  let weight = verified ? 1 : selfReported ? 0.7 : 0.5;
+
+  if (reasonTagCount > 0) {
+    weight += 0.1;
+  }
+
+  if (hasComment) {
+    weight += 0.1;
+  }
+
+  if (recentRatingCount >= 10) {
+    weight -= 0.4;
+  } else if (recentRatingCount >= 5) {
+    weight -= 0.2;
+  }
+
+  return Math.min(1, Math.max(0.1, Number(weight.toFixed(2))));
 }
 
 export async function registerAction(_: ActionState, formData: FormData): Promise<ActionState> {
@@ -241,6 +274,158 @@ export async function changePasswordAction(_: ActionState, formData: FormData): 
 export async function logoutAction() {
   await destroySession();
   redirect("/login");
+}
+
+export async function saveGameRatingAction(formData: FormData) {
+  const user = await requireUser();
+  assertRateLimit(`rate-game:${user.id}`, 20, 60_000);
+
+  const parsed = z
+    .object({
+      gameId: z.string().min(1),
+      score: z.coerce
+        .number()
+        .min(1, "평점은 1.0점 이상이어야 합니다.")
+        .max(5, "평점은 5.0점 이하여야 합니다.")
+        .refine((score) => Math.abs(score * 10 - Math.round(score * 10)) < 0.000001, "평점은 0.1 단위로 입력해주세요.")
+        .transform((score) => Math.round(score * 10) / 10),
+      played: z.boolean(),
+      reasonTags: z.array(z.string()).min(1, "평점 이유 태그를 하나 이상 선택해주세요.").max(6),
+      comment: z.string().trim().max(300).optional()
+    })
+    .parse({
+      gameId: value(formData, "gameId"),
+      score: formData.get("score"),
+      played: formData.get("played") === "on",
+      reasonTags: formData.getAll("reasonTags").map((tag) => String(tag)),
+      comment: value(formData, "comment") || undefined
+    });
+
+  const reasonTags = Array.from(new Set(parsed.reasonTags)).filter((tag) => RATING_REASON_VALUES.has(tag));
+
+  if (reasonTags.length === 0) {
+    throw new Error("평점 이유 태그를 하나 이상 선택해주세요.");
+  }
+
+  const expectedReasonValues =
+    parsed.score >= 4
+      ? POSITIVE_RATING_REASON_VALUES
+      : parsed.score >= 3
+        ? new Set([...POSITIVE_RATING_REASON_VALUES, ...NEGATIVE_RATING_REASON_VALUES])
+        : NEGATIVE_RATING_REASON_VALUES;
+  const expectedReasonLabel = parsed.score >= 4 ? "좋았던 이유" : parsed.score >= 3 ? "좋았던 이유 또는 아쉬웠던 이유" : "아쉬웠던 이유";
+
+  if (reasonTags.some((tag) => !expectedReasonValues.has(tag))) {
+    throw new Error(`${parsed.score.toFixed(1)}점에는 ${expectedReasonLabel} 태그만 선택할 수 있습니다.`);
+  }
+
+  const game = await prisma.game.findUnique({
+    where: { id: parsed.gameId },
+    select: { id: true, title: true }
+  });
+
+  if (!game) {
+    throw new Error("평가할 게임을 찾을 수 없습니다.");
+  }
+
+  const [verifiedLoanCount, recentRatingCount, existingRating] = await Promise.all([
+    prisma.loanActivityLog.count({
+      where: {
+        type: "BORROW",
+        gameId: parsed.gameId,
+        borrowerId: user.id
+      }
+    }),
+    prisma.gameRating.count({
+      where: {
+        userId: user.id,
+        updatedAt: { gte: new Date(Date.now() - 60_000) }
+      }
+    }),
+    prisma.gameRating.findUnique({
+      where: {
+        gameId_userId: {
+          gameId: parsed.gameId,
+          userId: user.id
+        }
+      },
+      select: {
+        score: true,
+        playedStatus: true,
+        trustWeight: true,
+        reasonTags: true,
+        comment: true,
+        isHidden: true
+      }
+    })
+  ]);
+
+  const verified = verifiedLoanCount > 0;
+  const playedStatus = verified ? "VERIFIED" : parsed.played ? "SELF_REPORTED" : "UNVERIFIED";
+  const trustWeight = calculateRatingTrustWeight({
+    verified,
+    selfReported: parsed.played,
+    reasonTagCount: reasonTags.length,
+    hasComment: Boolean(parsed.comment),
+    recentRatingCount
+  });
+
+  await prisma.gameRating.upsert({
+    where: {
+      gameId_userId: {
+        gameId: parsed.gameId,
+        userId: user.id
+      }
+    },
+    create: {
+      gameId: parsed.gameId,
+      userId: user.id,
+      score: parsed.score,
+      playedStatus,
+      trustWeight,
+      reasonTags,
+      comment: parsed.comment
+    },
+    update: {
+      score: parsed.score,
+      playedStatus,
+      trustWeight,
+      reasonTags,
+      comment: parsed.comment,
+      isHidden: false
+    }
+  });
+
+  await createGeneralActivityLog(prisma, {
+    category: "RATING",
+    action: existingRating ? "UPDATE_RATING" : "CREATE_RATING",
+    actor: user,
+    target: { type: "GAME", id: game.id, name: game.title },
+    message: existingRating
+      ? `${user.name} 회원이 ${game.title} 보드게임 평점을 수정했습니다.`
+      : `${user.name} 회원이 ${game.title} 보드게임에 평점을 남겼습니다.`,
+    metadata: {
+      score: parsed.score,
+      playedStatus,
+      trustWeight,
+      reasonTags,
+      hasComment: Boolean(parsed.comment),
+      previous: existingRating
+        ? {
+          score: existingRating.score,
+          playedStatus: existingRating.playedStatus,
+          trustWeight: existingRating.trustWeight,
+          reasonTags: existingRating.reasonTags,
+          hasComment: Boolean(existingRating.comment),
+          wasHidden: existingRating.isHidden
+        }
+        : null
+    }
+  });
+
+  revalidatePath("/");
+  revalidatePath("/account");
+  revalidatePath("/admin/logs");
 }
 
 export async function addGameAction(_: ActionState, formData: FormData): Promise<ActionState> {

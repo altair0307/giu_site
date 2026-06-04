@@ -300,3 +300,27 @@ model Announcement {
   @@index([isActive])
   @@index([publishedAt])
 }
+
+model GeneralActivityLog {
+  id              String   @id @default(cuid())
+  category        String
+  action          String
+  actorId         String?
+  actorName       String?
+  actorLoginId    String?
+  actorRole       String?
+  targetType      String?
+  targetId        String?
+  targetName      String?
+  message         String
+  metadata        Json?
+  occurredAt      DateTime
+  createdAt       DateTime @default(now())
+
+  @@index([category])
+  @@index([action])
+  @@index([actorId])
+  @@index([targetType])
+  @@index([targetId])
+  @@index([occurredAt])
+}

@@ -26,6 +26,14 @@ function formatPerson(name: string, loginId?: string | null, studentId?: string 
   return `${name}(${loginId ?? "-"}${studentId ? ` · ${studentId}` : ""})`;
 }
 
+function formatActor(name?: string | null, loginId?: string | null) {
+  if (!name && !loginId) {
+    return "시스템";
+  }
+
+  return `${name ?? "이름 없음"}(${loginId ?? "-"})`;
+}
+
 function readParticipants(value: unknown): ParticipantSnapshot[] {
   if (!Array.isArray(value)) {
     return [];
@@ -46,7 +54,18 @@ export default async function AdminActivityLogsPage({ searchParams }: ActivityLo
   const params = await searchParams;
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  const [loanLogs, meetupLogs, loanLogCount, meetupLogCount, recentBorrowCount, recentReturnCount, recentMeetupCount] =
+  const [
+    loanLogs,
+    meetupLogs,
+    generalLogs,
+    loanLogCount,
+    meetupLogCount,
+    generalLogCount,
+    recentBorrowCount,
+    recentReturnCount,
+    recentMeetupCount,
+    recentGeneralCount
+  ] =
     await Promise.all([
       prisma.loanActivityLog.findMany({
         orderBy: { occurredAt: "desc" },
@@ -56,8 +75,13 @@ export default async function AdminActivityLogsPage({ searchParams }: ActivityLo
         orderBy: { occurredAt: "desc" },
         take: 80
       }),
+      prisma.generalActivityLog.findMany({
+        orderBy: { occurredAt: "desc" },
+        take: 80
+      }),
       prisma.loanActivityLog.count(),
       prisma.meetupActivityLog.count(),
+      prisma.generalActivityLog.count(),
       prisma.loanActivityLog.count({ where: { type: "BORROW", occurredAt: { gte: since } } }),
       prisma.loanActivityLog.count({ where: { type: "RETURN", occurredAt: { gte: since } } }),
       prisma.meetupActivityLog.count({
@@ -65,7 +89,8 @@ export default async function AdminActivityLogsPage({ searchParams }: ActivityLo
           type: { in: ["SCHEDULED", "COMPLETED"] },
           occurredAt: { gte: since }
         }
-      })
+      }),
+      prisma.generalActivityLog.count({ where: { occurredAt: { gte: since } } })
     ]);
 
   return (
@@ -88,8 +113,12 @@ export default async function AdminActivityLogsPage({ searchParams }: ActivityLo
           <strong>{recentMeetupCount}</strong>
         </div>
         <div className="admin-summary-card">
+          <span>최근 30일 관리 작업</span>
+          <strong>{recentGeneralCount}</strong>
+        </div>
+        <div className="admin-summary-card">
           <span>전체 로그</span>
-          <strong>{loanLogCount + meetupLogCount}</strong>
+          <strong>{loanLogCount + meetupLogCount + generalLogCount}</strong>
         </div>
       </div>
 
@@ -122,6 +151,9 @@ export default async function AdminActivityLogsPage({ searchParams }: ActivityLo
           </a>
           <a className="ghost-link" href="/admin/logs/export?kind=meetups">
             약속 CSV
+          </a>
+          <a className="ghost-link" href="/admin/logs/export?kind=general">
+            관리 작업 CSV
           </a>
         </div>
       </section>
@@ -180,6 +212,31 @@ export default async function AdminActivityLogsPage({ searchParams }: ActivityLo
             );
           })}
           {meetupLogs.length === 0 ? <p className="empty">아직 게임 약속 로그가 없습니다.</p> : null}
+        </div>
+      </section>
+
+      <section className="section-block">
+        <div className="section-heading">
+          <h2>관리 작업 로그</h2>
+          <span>{generalLogs.length}건 표시</span>
+        </div>
+        <div className="admin-meetup-list">
+          {generalLogs.map((log) => (
+            <article className="admin-meetup-row" key={log.id}>
+              <div>
+                <strong>
+                  {log.category} · {log.action}
+                  {log.targetName ? ` · ${log.targetName}` : ""}
+                </strong>
+                <p className="muted">
+                  {formatActor(log.actorName, log.actorLoginId)} · {dateTimeFormatter.format(log.occurredAt)}
+                  {log.targetType ? ` · 대상 ${log.targetType}` : ""}
+                </p>
+                <p className="participants">{log.message}</p>
+              </div>
+            </article>
+          ))}
+          {generalLogs.length === 0 ? <p className="empty">아직 관리 작업 로그가 없습니다.</p> : null}
         </div>
       </section>
     </section>

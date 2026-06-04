@@ -63,6 +63,10 @@ function filenameFor(kind: string) {
     return `activity-meetups-${date}.csv`;
   }
 
+  if (kind === "general") {
+    return `activity-general-${date}.csv`;
+  }
+
   return `activity-logs-${date}.csv`;
 }
 
@@ -76,12 +80,13 @@ export async function GET(request: NextRequest) {
   const kind = request.nextUrl.searchParams.get("kind") ?? "all";
   const includeLoans = kind === "all" || kind === "loans";
   const includeMeetups = kind === "all" || kind === "meetups";
+  const includeGeneral = kind === "all" || kind === "general";
 
-  if (!includeLoans && !includeMeetups) {
+  if (!includeLoans && !includeMeetups && !includeGeneral) {
     return new NextResponse("Invalid export kind", { status: 400 });
   }
 
-  const [loanLogs, meetupLogs] = await Promise.all([
+  const [loanLogs, meetupLogs, generalLogs] = await Promise.all([
     includeLoans
       ? prisma.loanActivityLog.findMany({
           orderBy: { occurredAt: "desc" }
@@ -89,6 +94,11 @@ export async function GET(request: NextRequest) {
       : [],
     includeMeetups
       ? prisma.meetupActivityLog.findMany({
+          orderBy: { occurredAt: "desc" }
+        })
+      : [],
+    includeGeneral
+      ? prisma.generalActivityLog.findMany({
           orderBy: { occurredAt: "desc" }
         })
       : []
@@ -136,7 +146,24 @@ export async function GET(request: NextRequest) {
           log.gameTitle ? `게임=${log.gameTitle}` : "게임 미정"
         ]
       };
-    })
+    }),
+    ...generalLogs.map((log) => ({
+      occurredAt: log.occurredAt,
+      row: [
+        "관리",
+        `${log.category}/${log.action}`,
+        formatDate(log.occurredAt),
+        "",
+        log.targetName ?? "",
+        log.actorName ?? "시스템",
+        log.actorLoginId ?? "",
+        "",
+        "",
+        "",
+        "",
+        log.message
+      ]
+    }))
   ].sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
 
   rows.push(...activityRows.map((activityRow) => activityRow.row));

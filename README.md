@@ -202,6 +202,15 @@ npm run db:seed
 - Railway Cron은 UTC 기준입니다. 매일 오전 10시 KST에 실행하려면 `0 1 * * *`로 설정합니다.
 - Cron 전용 서비스를 같은 저장소로 만들 때는 Config file path를 `/railway.notify-loans.json`로 지정합니다.
 
+## 운영 로그 확장 기준
+
+운영자가 추적해야 하는 사용자/관리자 행동은 `src/lib/activity-log.ts`의 `createGeneralActivityLog`로 남깁니다.
+
+- 기존 대여/반납과 약속 로그는 전용 로그 모델을 유지합니다.
+- 회원가입, 비밀번호 변경/초기화, 계정 삭제, 보드게임 생성/수정/import, 공지 생성/수정/삭제처럼 운영 이력으로 확인해야 하는 행동은 범용 관리 작업 로그에 기록합니다.
+- 새 기능을 추가할 때는 액션 성공 직후 `category`, `action`, `actor`, `target`, `message`, 필요한 `metadata`를 함께 저장합니다.
+- 관리자 화면 `/admin/logs`와 CSV export는 범용 관리 작업 로그를 함께 보여줍니다.
+
 ## 보드게임 엑셀 양식
 
 관리자 업로드는 첫 번째 시트의 A-K 컬럼을 읽습니다.

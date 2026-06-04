@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createSession, destroySession, requireUser } from "@/lib/auth";
-import { createLoanActivityLog, createMeetupActivityLog } from "@/lib/activity-log";
+import { createGeneralActivityLog, createLoanActivityLog, createMeetupActivityLog } from "@/lib/activity-log";
 import { prisma } from "@/lib/db";
 import { parseGameWorkbook } from "@/lib/game-spreadsheet";
 import { notifyReturnRequested } from "@/lib/notifications";
@@ -139,6 +139,18 @@ export async function registerAction(_: ActionState, formData: FormData): Promis
     });
 
     await createSession(user.id);
+    await createGeneralActivityLog(prisma, {
+      category: "USER",
+      action: "REGISTER",
+      actor: user,
+      target: { type: "USER", id: user.id, name: user.name },
+      message: `${user.name} 회원이 가입했습니다.`,
+      metadata: {
+        loginId: user.loginId,
+        studentId: user.studentId,
+        role: user.role
+      }
+    });
   } catch (error) {
     return { message: actionError(error, "회원가입에 실패했습니다.") };
   }
@@ -208,8 +220,16 @@ export async function changePasswordAction(_: ActionState, formData: FormData): 
         mustChangePassword: false
       }
     });
+    await createGeneralActivityLog(prisma, {
+      category: "ACCOUNT",
+      action: "CHANGE_PASSWORD",
+      actor: user,
+      target: { type: "USER", id: user.id, name: user.name },
+      message: `${user.name} 회원이 비밀번호를 변경했습니다.`
+    });
 
     revalidatePath("/");
+    revalidatePath("/admin/logs");
     revalidatePath("/account/password");
   } catch (error) {
     return { message: actionError(error, "비밀번호 변경에 실패했습니다.") };
@@ -258,15 +278,32 @@ export async function addGameAction(_: ActionState, formData: FormData): Promise
         infoUrl: value(formData, "infoUrl") || undefined
       });
 
-    await prisma.game.create({
+    const game = await prisma.game.create({
       data: {
         ...parsed,
         isPresent: parsed.isPresent === "" || parsed.isPresent === undefined ? null : parsed.isPresent === "true"
       }
     });
+    await createGeneralActivityLog(prisma, {
+      category: "GAME",
+      action: "CREATE",
+      actor: user,
+      target: { type: "GAME", id: game.id, name: game.title },
+      message: `${user.name} 관리자가 ${game.title} 보드게임을 등록했습니다.`,
+      metadata: {
+        players: game.players,
+        bestPlayers: game.bestPlayers,
+        playTime: game.playTime,
+        quantity: game.quantity,
+        genre: game.genre,
+        isPresent: game.isPresent,
+        weight: game.weight
+      }
+    });
     revalidatePath("/");
     revalidatePath("/admin");
     revalidatePath("/admin/games");
+    revalidatePath("/admin/logs");
     return { ok: true, message: "게임을 추가했습니다." };
   } catch (error) {
     return { message: actionError(error, "게임 추가에 실패했습니다.") };
@@ -639,7 +676,8 @@ export async function pruneActivityLogsAction(formData: FormData) {
 
   await prisma.$transaction([
     prisma.loanActivityLog.deleteMany({ where: { occurredAt: { lt: cutoff } } }),
-    prisma.meetupActivityLog.deleteMany({ where: { occurredAt: { lt: cutoff } } })
+    prisma.meetupActivityLog.deleteMany({ where: { occurredAt: { lt: cutoff } } }),
+    prisma.generalActivityLog.deleteMany({ where: { occurredAt: { lt: cutoff } } })
   ]);
 
   revalidatePath("/admin");
@@ -677,8 +715,8 @@ export async function saveAnnouncementAction(_: ActionState, formData: FormData)
       return { message: "게시일 형식이 올바르지 않습니다." };
     }
 
-    if (parsed.id) {
-      await prisma.announcement.update({
+    const announcement = parsed.id
+      ? await prisma.announcement.update({
         where: { id: parsed.id },
         data: {
           title: parsed.title,
@@ -686,9 +724,8 @@ export async function saveAnnouncementAction(_: ActionState, formData: FormData)
           isActive: parsed.isActive,
           publishedAt: parsed.publishedAt
         }
-      });
-    } else {
-      await prisma.announcement.create({
+      })
+      : await prisma.announcement.create({
         data: {
           title: parsed.title,
           body: parsed.body,
@@ -696,10 +733,22 @@ export async function saveAnnouncementAction(_: ActionState, formData: FormData)
           publishedAt: parsed.publishedAt
         }
       });
-    }
+
+    await createGeneralActivityLog(prisma, {
+      category: "ANNOUNCEMENT",
+      action: parsed.id ? "UPDATE" : "CREATE",
+      actor: user,
+      target: { type: "ANNOUNCEMENT", id: announcement.id, name: announcement.title },
+      message: `${user.name} 관리자가 공지사항을 ${parsed.id ? "수정" : "등록"}했습니다.`,
+      metadata: {
+        isActive: announcement.isActive,
+        publishedAt: announcement.publishedAt.toISOString()
+      }
+    });
 
     revalidatePath("/");
     revalidatePath("/account");
+    revalidatePath("/admin/logs");
     revalidatePath("/admin/announcements");
     return { ok: true, message: parsed.id ? "공지사항을 수정했습니다." : "공지사항을 등록했습니다." };
   } catch (error) {
@@ -715,12 +764,24 @@ export async function deleteAnnouncementAction(formData: FormData) {
     throw new Error("관리자만 공지를 삭제할 수 있습니다.");
   }
 
-  await prisma.announcement.delete({
+  const announcement = await prisma.announcement.delete({
     where: { id: value(formData, "id") }
+  });
+  await createGeneralActivityLog(prisma, {
+    category: "ANNOUNCEMENT",
+    action: "DELETE",
+    actor: user,
+    target: { type: "ANNOUNCEMENT", id: announcement.id, name: announcement.title },
+    message: `${user.name} 관리자가 공지사항을 삭제했습니다.`,
+    metadata: {
+      isActive: announcement.isActive,
+      publishedAt: announcement.publishedAt.toISOString()
+    }
   });
 
   revalidatePath("/");
   revalidatePath("/account");
+  revalidatePath("/admin/logs");
   revalidatePath("/admin/announcements");
   redirect("/admin/announcements?notice=announcement-deleted");
 }
@@ -762,7 +823,7 @@ export async function updateGameAction(_: ActionState, formData: FormData): Prom
         infoUrl: value(formData, "infoUrl") || undefined
       });
 
-    await prisma.game.update({
+    const game = await prisma.game.update({
       where: { id: parsed.id },
       data: {
         title: parsed.title,
@@ -777,9 +838,23 @@ export async function updateGameAction(_: ActionState, formData: FormData): Prom
         infoUrl: parsed.infoUrl ?? null
       }
     });
+    await createGeneralActivityLog(prisma, {
+      category: "GAME",
+      action: "UPDATE",
+      actor: user,
+      target: { type: "GAME", id: game.id, name: game.title },
+      message: `${user.name} 관리자가 ${game.title} 보드게임 정보를 수정했습니다.`,
+      metadata: {
+        quantity: game.quantity,
+        genre: game.genre,
+        isPresent: game.isPresent,
+        weight: game.weight
+      }
+    });
 
     revalidatePath("/");
     revalidatePath("/admin");
+    revalidatePath("/admin/logs");
     return { ok: true, message: "게임 정보를 수정했습니다." };
   } catch (error) {
     return { message: actionError(error, "게임 수정에 실패했습니다.") };
@@ -821,7 +896,7 @@ export async function updateUserAction(_: ActionState, formData: FormData): Prom
       return { message: "본인의 관리자 권한은 해제할 수 없습니다." };
     }
 
-    await prisma.user.update({
+    const targetUser = await prisma.user.update({
       where: { id: parsed.id },
       data: {
         name: parsed.name,
@@ -829,8 +904,21 @@ export async function updateUserAction(_: ActionState, formData: FormData): Prom
         role: parsed.role
       }
     });
+    await createGeneralActivityLog(prisma, {
+      category: "USER",
+      action: "UPDATE",
+      actor: user,
+      target: { type: "USER", id: targetUser.id, name: targetUser.name },
+      message: `${user.name} 관리자가 ${targetUser.name} 회원 정보를 수정했습니다.`,
+      metadata: {
+        loginId: targetUser.loginId,
+        studentId: targetUser.studentId,
+        role: targetUser.role
+      }
+    });
 
     revalidatePath("/admin");
+    revalidatePath("/admin/logs");
     revalidatePath("/admin/users");
     return { ok: true, message: "회원 정보를 수정했습니다." };
   } catch (error) {
@@ -856,7 +944,7 @@ export async function resetUserPasswordAction(formData: FormData) {
 
   const targetUserId = value(formData, "id");
 
-  await prisma.user.update({
+  const targetUser = await prisma.user.update({
     where: { id: targetUserId },
     data: {
       passwordHash: await bcrypt.hash("1981", 12),
@@ -865,7 +953,19 @@ export async function resetUserPasswordAction(formData: FormData) {
   });
 
   await prisma.session.deleteMany({ where: { userId: targetUserId } });
+  await createGeneralActivityLog(prisma, {
+    category: "ACCOUNT",
+    action: "RESET_PASSWORD",
+    actor: user,
+    target: { type: "USER", id: targetUser.id, name: targetUser.name },
+    message: `${user.name} 관리자가 ${targetUser.name} 회원의 비밀번호를 초기화했습니다.`,
+    metadata: {
+      loginId: targetUser.loginId,
+      studentId: targetUser.studentId
+    }
+  });
   revalidatePath("/admin");
+  revalidatePath("/admin/logs");
   revalidatePath("/admin/users");
   redirect("/admin/users?notice=password-reset");
 }
@@ -889,8 +989,30 @@ export async function deleteUserAction(formData: FormData) {
     throw new Error("삭제 확인 문구가 올바르지 않습니다.");
   }
 
+  const targetUser = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: { id: true, name: true, loginId: true, studentId: true, role: true }
+  });
+
+  if (!targetUser) {
+    throw new Error("삭제할 회원을 찾을 수 없습니다.");
+  }
+
   await prisma.user.delete({ where: { id: targetUserId } });
+  await createGeneralActivityLog(prisma, {
+    category: "USER",
+    action: "DELETE",
+    actor: user,
+    target: { type: "USER", id: targetUser.id, name: targetUser.name },
+    message: `${user.name} 관리자가 ${targetUser.name} 회원 계정을 삭제했습니다.`,
+    metadata: {
+      loginId: targetUser.loginId,
+      studentId: targetUser.studentId,
+      role: targetUser.role
+    }
+  });
   revalidatePath("/admin");
+  revalidatePath("/admin/logs");
   revalidatePath("/admin/users");
   redirect("/admin/users?notice=user-deleted");
 }
@@ -997,11 +1119,27 @@ export async function importGamesAction(_: ActionState, formData: FormData): Pro
         },
         data: { gameId: null }
       });
+
+      await createGeneralActivityLog(tx, {
+        category: "GAME",
+        action: "IMPORT",
+        actor: user,
+        target: { type: "GAME", name: "보드게임 DB" },
+        message: `${user.name} 관리자가 보드게임 DB를 엑셀로 반영했습니다.`,
+        metadata: {
+          rowCount: rows.length,
+          createdCount,
+          updatedCount,
+          deletedCount,
+          keptCount
+        }
+      });
     });
 
     revalidatePath("/");
     revalidatePath("/admin");
     revalidatePath("/admin/games");
+    revalidatePath("/admin/logs");
     return {
       ok: true,
       message: `${rows.length}개 행을 반영했습니다. 수정 ${updatedCount}개, 추가 ${createdCount}개, 삭제 ${deletedCount}개${

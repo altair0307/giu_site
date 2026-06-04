@@ -1,6 +1,11 @@
 import { Prisma } from "@prisma/client";
 
 type LogClient = Prisma.TransactionClient;
+type GeneralLogClient = {
+  generalActivityLog: {
+    create: (args: Prisma.GeneralActivityLogCreateArgs) => Promise<unknown>;
+  };
+};
 
 type SnapshotParticipant = {
   id: string;
@@ -35,6 +40,44 @@ export async function createLoanActivityLog(tx: LogClient, input: LoanLogInput) 
       borrowerStudentId: input.borrowerStudentId ?? null,
       occurredAt: input.occurredAt,
       dueAt: input.dueAt ?? null
+    }
+  });
+}
+
+type GeneralLogInput = {
+  category: string;
+  action: string;
+  actor?: {
+    id: string;
+    name: string;
+    loginId: string;
+    role?: string | null;
+  } | null;
+  target?: {
+    type: string;
+    id?: string | null;
+    name?: string | null;
+  } | null;
+  message: string;
+  metadata?: Prisma.InputJsonValue;
+  occurredAt?: Date;
+};
+
+export async function createGeneralActivityLog(client: GeneralLogClient, input: GeneralLogInput) {
+  await client.generalActivityLog.create({
+    data: {
+      category: input.category,
+      action: input.action,
+      actorId: input.actor?.id ?? null,
+      actorName: input.actor?.name ?? null,
+      actorLoginId: input.actor?.loginId ?? null,
+      actorRole: input.actor?.role ?? null,
+      targetType: input.target?.type ?? null,
+      targetId: input.target?.id ?? null,
+      targetName: input.target?.name ?? null,
+      message: input.message,
+      metadata: input.metadata ?? Prisma.JsonNull,
+      occurredAt: input.occurredAt ?? new Date()
     }
   });
 }

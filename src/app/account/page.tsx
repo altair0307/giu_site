@@ -2,6 +2,7 @@ import Link from "next/link";
 import { logoutAction } from "@/app/actions";
 import { ReturnDialog } from "@/app/borrow-dialog";
 import { RatingDialog } from "@/app/rating-dialog";
+import { StarRating } from "@/app/star-rating";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getRatingReasonLabel } from "@/lib/game-rating";
@@ -226,9 +227,7 @@ export default async function AccountPage() {
                 <div>
                   <div className="card-header compact">
                     <h3>{rating.game.title}</h3>
-                    <span className={rating.score >= 4 ? "badge green" : rating.score >= 3 ? "badge amber" : "badge red"}>
-                      {rating.score.toFixed(1)}점
-                    </span>
+                    <StarRating score={rating.score} />
                   </div>
                   {details ? <p className="muted account-loan-detail">{details}</p> : null}
                   <p className="participants">이유: {reasonLabels}</p>

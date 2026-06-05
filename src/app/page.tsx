@@ -9,6 +9,8 @@ import {
 import { AnnouncementPopup } from "@/app/announcement-popup";
 import { BorrowDialog, ReturnDialog } from "@/app/borrow-dialog";
 import { RatingDialog } from "@/app/rating-dialog";
+import { RatingSummaryDialog } from "@/app/rating-summary-dialog";
+import { StarRating } from "@/app/star-rating";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { matchesGameDetailFilters } from "@/lib/game-search";
@@ -205,6 +207,30 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const filteredGames = gameRows.filter((game) => matchesGameDetailFilters(game, detailFilters));
   const gameTotal = filteredGames.length;
   const games = filteredGames.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const gameIds = games.map((game) => game.id);
+  const publicRatings = gameIds.length > 0
+    ? await prisma.gameRating.findMany({
+      where: {
+        gameId: { in: gameIds },
+        isHidden: false
+      },
+      include: {
+        user: {
+          select: {
+            name: true,
+            loginId: true
+          }
+        }
+      },
+      orderBy: { updatedAt: "desc" }
+    })
+    : [];
+  const ratingsByGameId = new Map<string, typeof publicRatings>();
+
+  for (const rating of publicRatings) {
+    ratingsByGameId.set(rating.gameId, [...(ratingsByGameId.get(rating.gameId) ?? []), rating]);
+  }
+
   const totalPages = Math.max(1, Math.ceil(gameTotal / PAGE_SIZE));
   const urgentLoans = myActiveLoans.filter((loan) => loan.dueAt.getTime() - now.getTime() <= DAY_MS);
   const pageHref = (targetPage: number) => {
@@ -324,6 +350,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 const pendingBorrowRequest = game.loanRequests[0];
                 const upcomingMeetup = game.meetups[0];
                 const myRating = game.ratings[0];
+                const publicGameRatings = ratingsByGameId.get(game.id) ?? [];
+                const averageScore = publicGameRatings.length > 0
+                  ? publicGameRatings.reduce((sum, rating) => sum + rating.score, 0) / publicGameRatings.length
+                  : null;
                 const pendingReturnRequest = activeLoan?.requests[0];
                 const canReturn =
                   activeLoan &&
@@ -339,7 +369,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                           .filter(Boolean)
                           .join(" · ")}
                       </span>
-                      {myRating ? <small>내 평점 {myRating.score.toFixed(1)}점</small> : null}
+                      {myRating ? <StarRating className="game-inline-rating" label="내 평점" score={myRating.score} /> : null}
+                      {averageScore !== null ? (
+                        <span className="game-inline-rating-line">
+                          <StarRating className="game-inline-rating" label="평균" score={averageScore} />
+                          <small>{publicGameRatings.length}명</small>
+                        </span>
+                      ) : null}
                     </span>
                     <span className={game.status === "AVAILABLE" && !upcomingMeetup ? "badge green" : "badge amber"}>
                       {game.status === "AVAILABLE" && pendingBorrowRequest
@@ -352,19 +388,36 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                             ? "반납 승인 대기"
                             : `${activeLoan?.borrower.name ?? "회원"} 대여 중`}
                     </span>
-                    <div className="row-actions">
-                      <RatingDialog gameId={game.id} gameTitle={game.title} rating={myRating ?? null} />
-                      {game.status === "AVAILABLE" && !pendingBorrowRequest && !upcomingMeetup ? (
-                        <BorrowDialog gameId={game.id} gameTitle={game.title} />
-                      ) : canReturn && activeLoan ? (
-                        <ReturnDialog loanId={activeLoan.id} gameTitle={game.title} />
-                      ) : pendingBorrowRequest ? (
-                        <span className="muted">관리자 승인 대기</span>
-                      ) : pendingReturnRequest ? (
-                        <span className="muted">반납 승인 대기</span>
-                      ) : (
-                        <span className="muted">반납 예정 {activeLoan ? dateFormatter.format(activeLoan.dueAt) : "-"}</span>
-                      )}
+                    <div className="game-action-stack">
+                      <div className="game-rating-actions">
+                        <RatingSummaryDialog
+                          gameTitle={game.title}
+                          averageScore={averageScore}
+                          ratings={publicGameRatings.map((rating) => ({
+                            userName: rating.user.name,
+                            userLoginId: rating.user.loginId,
+                            score: rating.score,
+                            playedStatus: rating.playedStatus,
+                            reasonTags: rating.reasonTags,
+                            comment: rating.comment,
+                            updatedAtLabel: dateFormatter.format(rating.updatedAt)
+                          }))}
+                        />
+                        <RatingDialog gameId={game.id} gameTitle={game.title} rating={myRating ?? null} />
+                      </div>
+                      <div className="game-loan-actions">
+                        {game.status === "AVAILABLE" && !pendingBorrowRequest && !upcomingMeetup ? (
+                          <BorrowDialog gameId={game.id} gameTitle={game.title} />
+                        ) : canReturn && activeLoan ? (
+                          <ReturnDialog loanId={activeLoan.id} gameTitle={game.title} />
+                        ) : pendingBorrowRequest ? (
+                          <span className="muted">관리자 승인 대기</span>
+                        ) : pendingReturnRequest ? (
+                          <span className="muted">반납 승인 대기</span>
+                        ) : (
+                          <span className="muted">반납 예정 {activeLoan ? dateFormatter.format(activeLoan.dueAt) : "-"}</span>
+                        )}
+                      </div>
                     </div>
                   </article>
                 );

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+
+const EXPORT_LIMIT = 5000;
 
 type ParticipantSnapshot = {
   name: string;
@@ -70,6 +73,14 @@ function filenameFor(kind: string) {
   return `activity-logs-${date}.csv`;
 }
 
+function parsePeriod(value: string | null) {
+  if (value === "7" || value === "30" || value === "90" || value === "365") {
+    return Number(value);
+  }
+
+  return null;
+}
+
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
 
@@ -78,6 +89,10 @@ export async function GET(request: NextRequest) {
   }
 
   const kind = request.nextUrl.searchParams.get("kind") ?? "all";
+  const query = String(request.nextUrl.searchParams.get("q") ?? "").trim();
+  const periodDays = parsePeriod(request.nextUrl.searchParams.get("period") ?? "30");
+  const periodFilter = periodDays ? { gte: new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000) } : undefined;
+  const occurredAtWhere = periodFilter ? { occurredAt: periodFilter } : {};
   const includeLoans = kind === "all" || kind === "loans";
   const includeMeetups = kind === "all" || kind === "meetups";
   const includeGeneral = kind === "all" || kind === "general";
@@ -86,20 +101,69 @@ export async function GET(request: NextRequest) {
     return new NextResponse("Invalid export kind", { status: 400 });
   }
 
+  const loanWhere: Prisma.LoanActivityLogWhereInput = {
+    ...occurredAtWhere,
+    ...(query
+      ? {
+          OR: [
+            { gameTitle: { contains: query, mode: "insensitive" } },
+            { borrowerName: { contains: query, mode: "insensitive" } },
+            { borrowerLoginId: { contains: query, mode: "insensitive" } },
+            { borrowerStudentId: { contains: query, mode: "insensitive" } }
+          ]
+        }
+      : {})
+  };
+  const meetupWhere: Prisma.MeetupActivityLogWhereInput = {
+    ...occurredAtWhere,
+    ...(query
+      ? {
+          OR: [
+            { title: { contains: query, mode: "insensitive" } },
+            { gameTitle: { contains: query, mode: "insensitive" } },
+            { tableName: { contains: query, mode: "insensitive" } },
+            { hostName: { contains: query, mode: "insensitive" } },
+            { hostLoginId: { contains: query, mode: "insensitive" } }
+          ]
+        }
+      : {})
+  };
+  const generalWhere: Prisma.GeneralActivityLogWhereInput = {
+    ...occurredAtWhere,
+    ...(query
+      ? {
+          OR: [
+            { category: { contains: query, mode: "insensitive" } },
+            { action: { contains: query, mode: "insensitive" } },
+            { actorName: { contains: query, mode: "insensitive" } },
+            { actorLoginId: { contains: query, mode: "insensitive" } },
+            { targetName: { contains: query, mode: "insensitive" } },
+            { message: { contains: query, mode: "insensitive" } }
+          ]
+        }
+      : {})
+  };
+
   const [loanLogs, meetupLogs, generalLogs] = await Promise.all([
     includeLoans
       ? prisma.loanActivityLog.findMany({
-          orderBy: { occurredAt: "desc" }
+          where: loanWhere,
+          orderBy: { occurredAt: "desc" },
+          take: EXPORT_LIMIT
         })
       : [],
     includeMeetups
       ? prisma.meetupActivityLog.findMany({
-          orderBy: { occurredAt: "desc" }
+          where: meetupWhere,
+          orderBy: { occurredAt: "desc" },
+          take: EXPORT_LIMIT
         })
       : [],
     includeGeneral
       ? prisma.generalActivityLog.findMany({
-          orderBy: { occurredAt: "desc" }
+          where: generalWhere,
+          orderBy: { occurredAt: "desc" },
+          take: EXPORT_LIMIT
         })
       : []
   ]);

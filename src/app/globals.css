@@ -336,6 +336,7 @@ h3 {
 .pager {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
   margin-top: 12px;
 }
@@ -356,6 +357,14 @@ h3 {
 .pager-link.disabled {
   pointer-events: none;
   opacity: 0.45;
+}
+
+.pager-status {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  font-weight: 800;
 }
 
 .danger-link {
@@ -805,6 +814,50 @@ textarea:focus {
 
 .loan-alert-list .notice {
   margin-bottom: 0;
+}
+
+.log-filter-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.log-filter-form {
+  display: grid;
+  grid-template-columns: 160px 160px minmax(220px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.log-filter-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.log-filter-form input,
+.log-filter-form select {
+  width: 100%;
+}
+
+.log-row {
+  grid-template-columns: 96px minmax(0, 1fr);
+}
+
+.log-kind {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: start;
+  border: 1px solid rgba(33, 92, 85, 0.16);
+  border-radius: 8px;
+  padding: 0 10px;
+  background: var(--surface-soft);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .log-maintenance {
@@ -1466,11 +1519,13 @@ textarea:focus {
   }
 
   .filter-bar,
+  .log-filter-form,
   .game-table-head,
   .game-row,
   .admin-game-row,
   .admin-user-row,
   .admin-user-edit,
+  .log-row,
   .admin-meetup-row,
   .admin-loan-row,
   .account-loan-row,

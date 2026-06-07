@@ -7,4 +7,6 @@ node_modules
 dist
 coverage
 *.log
+tsconfig.tsbuildinfo
 club-games-source.xlsx
+docs/codex_handoff_ko.md

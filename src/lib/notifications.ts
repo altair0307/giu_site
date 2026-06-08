@@ -164,6 +164,47 @@ export async function notifyReturnRequested(input: {
   );
 }
 
+export async function notifyLoanBorrowed(input: {
+  loanId: string;
+  loanRequestId: string;
+  gameTitle: string;
+  borrowerName: string;
+  borrowerLoginId: string;
+  borrowerStudentId?: string | null;
+  borrowedAt: Date;
+  dueAt: Date;
+  userId: string;
+}) {
+  const borrower = `${input.borrowerName}(${input.borrowerLoginId}${
+    input.borrowerStudentId ? ` / ${input.borrowerStudentId}` : ""
+  })`;
+  const title = "대여 완료";
+  const message = `${borrower}님이 ${input.gameTitle} 대여를 시작했습니다.`;
+
+  return sendManagedDiscordNotification(
+    {
+      type: "LOAN_BORROWED",
+      dedupeKey: `loan-borrowed:${input.loanId}`,
+      loanId: input.loanId,
+      loanRequestId: input.loanRequestId,
+      userId: input.userId,
+      title,
+      message
+    },
+    {
+      title,
+      description: message,
+      color: 0x2f80ed,
+      fields: [
+        { name: "게임", value: input.gameTitle, inline: true },
+        { name: "대여자", value: borrower, inline: true },
+        { name: "대여 시각", value: formatKoreaDateTime(input.borrowedAt), inline: true },
+        { name: "반납 예정", value: formatKoreaDateTime(input.dueAt), inline: true }
+      ]
+    }
+  );
+}
+
 export async function notifyLoanOverdue(input: {
   loanId: string;
   gameTitle: string;

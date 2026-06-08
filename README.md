@@ -197,8 +197,9 @@ npm run db:seed
 
 ## Discord 알림과 Cron
 
-반납 요청 알림과 반납 지연 알림은 Discord Webhook으로 발송합니다.
+대여 완료, 반납 요청, 반납 지연 알림은 Discord Webhook으로 발송합니다.
 
+- 대여 완료 알림은 실제 대여 기록이 생성된 직후 발송됩니다.
 - 반납 요청 알림은 사용자가 반납 요청을 올릴 때 즉시 발송됩니다.
 - 반납 지연 알림은 Railway Cron 서비스에서 `npm run notify:loans`를 실행하도록 설정합니다.
 - Railway Cron은 UTC 기준입니다. 매일 오전 10시 KST에 실행하려면 `0 1 * * *`로 설정합니다.

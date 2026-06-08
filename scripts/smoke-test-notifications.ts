@@ -1,10 +1,23 @@
 import { prisma } from "../src/lib/db";
-import { notifyLoanOverdue, notifyReturnRequested } from "../src/lib/notifications";
+import { notifyLoanBorrowed, notifyLoanOverdue, notifyReturnRequested } from "../src/lib/notifications";
 
 async function main() {
   const now = new Date();
   const stamp = now.toISOString().replaceAll(":", "-").replaceAll(".", "-");
   const dueAt = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const borrowDueAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const loanBorrowed = await notifyLoanBorrowed({
+    loanId: `test-loan-borrowed-${stamp}`,
+    loanRequestId: `test-borrow-request-${stamp}`,
+    gameTitle: "[테스트] 대여 완료 알림",
+    borrowerName: "테스트 사용자",
+    borrowerLoginId: "test-user",
+    borrowerStudentId: "0000",
+    borrowedAt: now,
+    dueAt: borrowDueAt,
+    userId: `test-user-${stamp}`
+  });
 
   const returnRequested = await notifyReturnRequested({
     loanId: `test-loan-return-${stamp}`,
@@ -32,6 +45,7 @@ async function main() {
   console.log(
     JSON.stringify(
       {
+        loanBorrowed,
         returnRequested,
         overdue
       },
@@ -40,7 +54,7 @@ async function main() {
     )
   );
 
-  if (!returnRequested.sent || !overdue.sent) {
+  if (!loanBorrowed.sent || !returnRequested.sent || !overdue.sent) {
     process.exitCode = 1;
   }
 }

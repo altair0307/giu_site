@@ -10,7 +10,7 @@ import { createGeneralActivityLog, createLoanActivityLog, createMeetupActivityLo
 import { prisma } from "@/lib/db";
 import { NEGATIVE_RATING_REASON_VALUES, POSITIVE_RATING_REASON_VALUES, RATING_REASON_VALUES } from "@/lib/game-rating";
 import { parseGameWorkbook } from "@/lib/game-spreadsheet";
-import { notifyReturnRequested } from "@/lib/notifications";
+import { notifyLoanBorrowed, notifyReturnRequested } from "@/lib/notifications";
 import { assertRateLimit } from "@/lib/rate-limit";
 import { getClientKey } from "@/lib/request";
 
@@ -511,7 +511,7 @@ export async function borrowGameAction(formData: FormData) {
   const now = new Date();
   await assertGameHasNoUpcomingMeetup(gameId, now);
 
-  await prisma.$transaction(async (tx) => {
+  const borrowedLoan = await prisma.$transaction(async (tx) => {
     const game = await tx.game.findUnique({ where: { id: gameId } });
 
     if (!game || game.status !== "AVAILABLE") {
@@ -545,7 +545,7 @@ export async function borrowGameAction(formData: FormData) {
         gameId,
         borrowerId: user.id,
         borrowedAt: now,
-        dueAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        dueAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
       }
     });
 
@@ -580,7 +580,21 @@ export async function borrowGameAction(formData: FormData) {
       occurredAt: now,
       dueAt: loan.dueAt
     });
+
+    return {
+      loanId: loan.id,
+      loanRequestId: request.id,
+      gameTitle: game.title,
+      borrowerName: user.name,
+      borrowerLoginId: user.loginId,
+      borrowerStudentId: user.studentId,
+      borrowedAt: loan.borrowedAt,
+      dueAt: loan.dueAt,
+      userId: user.id
+    };
   });
+
+  await notifyLoanBorrowed(borrowedLoan);
 
   revalidatePath("/");
   revalidatePath("/account");
@@ -672,7 +686,7 @@ export async function approveLoanRequestAction(formData: FormData) {
   const requestId = value(formData, "requestId");
   const now = new Date();
 
-  await prisma.$transaction(async (tx) => {
+  const borrowedLoan = await prisma.$transaction(async (tx) => {
     const request = await tx.loanRequest.findUnique({
       where: { id: requestId },
       include: {
@@ -702,7 +716,7 @@ export async function approveLoanRequestAction(formData: FormData) {
           gameId: request.gameId,
           borrowerId: request.requesterId,
           borrowedAt: now,
-          dueAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+          dueAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
         }
       });
 
@@ -742,6 +756,27 @@ export async function approveLoanRequestAction(formData: FormData) {
         where: { id: request.id },
         data: { loanId: loan.id }
       });
+
+      await tx.loanRequest.update({
+        where: { id: request.id },
+        data: {
+          status: "APPROVED",
+          reviewerId: user.id,
+          reviewedAt: now
+        }
+      });
+
+      return {
+        loanId: loan.id,
+        loanRequestId: request.id,
+        gameTitle: request.game.title,
+        borrowerName: request.requester.name,
+        borrowerLoginId: request.requester.loginId,
+        borrowerStudentId: request.requester.studentId,
+        borrowedAt: loan.borrowedAt,
+        dueAt: loan.dueAt,
+        userId: request.requester.id
+      };
     } else {
       if (!request.loanId || !request.loan || request.loan.status !== "ACTIVE") {
         throw new Error("반납 승인 가능한 대여 기록이 아닙니다.");
@@ -770,17 +805,12 @@ export async function approveLoanRequestAction(formData: FormData) {
       });
     }
 
-    if (request.type === "BORROW") {
-      await tx.loanRequest.update({
-        where: { id: request.id },
-        data: {
-          status: "APPROVED",
-          reviewerId: user.id,
-          reviewedAt: now
-        }
-      });
-    }
+    return null;
   });
+
+  if (borrowedLoan) {
+    await notifyLoanBorrowed(borrowedLoan);
+  }
 
   revalidatePath("/");
   revalidatePath("/account");

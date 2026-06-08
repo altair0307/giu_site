@@ -52,6 +52,7 @@
 - Discord 알림은 `sendManagedDiscordNotification`을 통해 보냅니다.
 - 알림에는 중복 발송을 막는 `dedupeKey`를 둡니다.
 - 알림 실패는 `NotificationLog`에 `FAILED`로 남기고, 기능 전체가 불필요하게 깨지지 않도록 처리합니다.
+- 대여 완료, 반납 요청, 반납 지연처럼 성격이 다른 알림은 Discord embed 색상을 구분합니다.
 - 사용자에게 표시되는 날짜와 Discord 알림 날짜는 한국 시간 기준으로 보여줍니다.
 - Railway Cron은 UTC 기준임을 문서와 설정에서 함께 확인합니다.
 

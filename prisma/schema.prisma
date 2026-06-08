@@ -56,6 +56,7 @@ enum RatingPlayedStatus {
 }
 
 enum NotificationType {
+  LOAN_BORROWED
   RETURN_REQUESTED
   LOAN_OVERDUE
 }

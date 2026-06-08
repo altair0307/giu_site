@@ -94,7 +94,13 @@ export function RatingDialog({ gameId, gameTitle, rating }: RatingDialogProps) {
                 setError("");
 
                 try {
-                  await saveGameRatingAction(new FormData(event.currentTarget));
+                  const result = await saveGameRatingAction(new FormData(event.currentTarget));
+
+                  if (result.message) {
+                    setError(result.message);
+                    return;
+                  }
+
                   setOpen(false);
                   router.refresh();
                 } catch (submitError) {

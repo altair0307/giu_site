@@ -4,14 +4,9 @@ import { createMeetupAction, logoutAction } from "@/app/actions";
 import { ActionForm } from "@/app/action-form";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { formatKoreaDateTimeLocal } from "@/lib/date-time";
 
 const GAME_PICKER_SIZE = 12;
-
-function toDatetimeLocalValue(date: Date) {
-  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-
-  return localDate.toISOString().slice(0, 16);
-}
 
 type NewMeetupPageProps = {
   searchParams: Promise<{
@@ -31,7 +26,7 @@ export default async function NewMeetupPage({ searchParams }: NewMeetupPageProps
   const gameQ = (params.gameQ ?? "").trim();
   const page = Math.max(1, Number(params.page ?? "1") || 1);
   const now = new Date();
-  const nowInputValue = toDatetimeLocalValue(now);
+  const nowInputValue = formatKoreaDateTimeLocal(now);
   const gameWhere = {
     status: "AVAILABLE" as const,
     meetups: {

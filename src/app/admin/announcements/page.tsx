@@ -1,8 +1,9 @@
 import { ActionForm } from "@/app/action-form";
 import { deleteAnnouncementAction, saveAnnouncementAction } from "@/app/actions";
 import { prisma } from "@/lib/db";
+import { createKoreaDateFormatter, formatKoreaDateTimeLocal } from "@/lib/date-time";
 
-const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
+const dateFormatter = createKoreaDateFormatter({
   year: "numeric",
   month: "short",
   day: "numeric"
@@ -13,10 +14,6 @@ type AdminAnnouncementsPageProps = {
     notice?: string;
   }>;
 };
-
-function toDateTimeLocal(date: Date) {
-  return date.toISOString().slice(0, 16);
-}
 
 export default async function AdminAnnouncementsPage({ searchParams }: AdminAnnouncementsPageProps) {
   const params = await searchParams;
@@ -53,7 +50,7 @@ export default async function AdminAnnouncementsPage({ searchParams }: AdminAnno
         </label>
         <label>
           게시일
-          <input name="publishedAt" type="datetime-local" defaultValue={toDateTimeLocal(new Date())} required />
+          <input name="publishedAt" type="datetime-local" defaultValue={formatKoreaDateTimeLocal(new Date())} required />
         </label>
         <label className="wide">
           내용
@@ -81,7 +78,7 @@ export default async function AdminAnnouncementsPage({ searchParams }: AdminAnno
                 </label>
                 <label>
                   게시일
-                  <input name="publishedAt" type="datetime-local" defaultValue={toDateTimeLocal(announcement.publishedAt)} required />
+                  <input name="publishedAt" type="datetime-local" defaultValue={formatKoreaDateTimeLocal(announcement.publishedAt)} required />
                 </label>
                 <label className="wide">
                   내용

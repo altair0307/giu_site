@@ -1,5 +1,6 @@
 import type { NotificationType } from "@prisma/client";
 import { prisma } from "./db";
+import { createKoreaDateFormatter } from "./date-time";
 
 type NotificationInput = {
   type: NotificationType;
@@ -18,8 +19,7 @@ type DiscordEmbed = {
   fields?: { name: string; value: string; inline?: boolean }[];
 };
 
-const KOREA_TIME_FORMATTER = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "Asia/Seoul",
+const KOREA_TIME_FORMATTER = createKoreaDateFormatter({
   year: "numeric",
   month: "short",
   day: "numeric",

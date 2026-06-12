@@ -9,6 +9,7 @@ import { z } from "zod";
 import { createSession, destroySession, requireUser } from "@/lib/auth";
 import { createGeneralActivityLog, createLoanActivityLog, createMeetupActivityLog } from "@/lib/activity-log";
 import { prisma } from "@/lib/db";
+import { parseKoreaDateTimeLocal } from "@/lib/date-time";
 import { NEGATIVE_RATING_REASON_VALUES, POSITIVE_RATING_REASON_VALUES, RATING_REASON_VALUES } from "@/lib/game-rating";
 import { parseGameWorkbook } from "@/lib/game-spreadsheet";
 import { notifyLoanBorrowed, notifyReturnRequested } from "@/lib/notifications";
@@ -1203,7 +1204,7 @@ export async function saveAnnouncementAction(_: ActionState, formData: FormData)
         title: value(formData, "title"),
         body: value(formData, "body"),
         isActive: formData.get("isActive") === "on",
-        publishedAt: publishedAtValue ? new Date(publishedAtValue) : new Date()
+        publishedAt: publishedAtValue ? parseKoreaDateTimeLocal(publishedAtValue) : new Date()
       });
 
     if (Number.isNaN(parsed.publishedAt.getTime())) {
@@ -1667,7 +1668,7 @@ export async function createMeetupAction(_: ActionState, formData: FormData): Pr
         kind: value(formData, "kind") === "BRIDGE" ? "BRIDGE" : "GENERAL",
         title: value(formData, "title"),
         description: value(formData, "description") || undefined,
-        startsAt: formData.get("startsAt"),
+        startsAt: parseKoreaDateTimeLocal(value(formData, "startsAt")),
         maxPeople: formData.get("maxPeople"),
         gameId: value(formData, "gameId") || undefined,
         tableId: value(formData, "tableId")
@@ -2961,6 +2962,7 @@ export async function completeMeetupAction(formData: FormData) {
   const returnTo = value(formData, "returnTo") || "/";
   const { user } = await requireMeetupManager(meetupId);
   assertRateLimit(`complete-meetup:${user.id}`, 20, 60_000);
+  let bridgeRoomId: string | null = null;
 
   await prisma.$transaction(async (tx) => {
     const meetupForLog = await findMeetupForLog(tx, meetupId);
@@ -2970,11 +2972,51 @@ export async function completeMeetupAction(formData: FormData) {
     }
 
     await createMeetupActivityLog(tx, "COMPLETED", meetupForLog, new Date());
-    await tx.meetup.delete({ where: { id: meetupId } });
+
+    if (meetupForLog.kind === "BRIDGE") {
+      const bridgeRoom = await tx.bridgeRoom.findUnique({
+        where: { meetupId },
+        include: {
+          deals: {
+            where: { completedAt: null },
+            select: { id: true }
+          }
+        }
+      });
+
+      if (bridgeRoom?.deals.length) {
+        throw new Error("진행 중인 딜이 끝난 뒤 세션을 종료할 수 있습니다.");
+      }
+
+      if (bridgeRoom) {
+        bridgeRoomId = bridgeRoom.id;
+        await tx.bridgeRoom.update({
+          where: { id: bridgeRoom.id },
+          data: { status: "COMPLETED" }
+        });
+
+        await createGeneralActivityLog(tx, {
+          category: "BRIDGE",
+          action: "SESSION_COMPLETE",
+          actor: user,
+          target: { type: "BRIDGE_ROOM", id: bridgeRoom.id, name: meetupForLog.title },
+          message: `${user.name} 사용자가 브릿지 세션을 종료했습니다.`,
+          metadata: { meetupId }
+        });
+      }
+    } else {
+      await tx.meetup.delete({ where: { id: meetupId } });
+    }
   });
+
   revalidatePath("/");
   revalidatePath("/admin");
+  revalidatePath("/admin/meetups");
   revalidatePath("/admin/logs");
+  if (bridgeRoomId) {
+    revalidatePath(`/bridge/${bridgeRoomId}`);
+    revalidatePath(`/meetups/${meetupId}/manage`);
+  }
   redirect(returnTo);
 }
 

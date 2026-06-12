@@ -8,14 +8,21 @@ export default async function AdminMeetupsPage() {
     where: {
       OR: [
         { startsAt: { gte: new Date() } },
-        { kind: "BRIDGE" }
+        {
+          kind: "BRIDGE",
+          bridgeRoom: {
+            is: {
+              status: { in: ["LOBBY", "PLAYING"] }
+            }
+          }
+        }
       ]
     },
     include: {
       host: { select: { name: true, loginId: true } },
       game: true,
       table: true,
-      bridgeRoom: { select: { id: true } },
+      bridgeRoom: { select: { id: true, status: true } },
       participants: true
     },
     orderBy: { startsAt: "asc" },
@@ -31,6 +38,7 @@ export default async function AdminMeetupsPage() {
       <div className="admin-meetup-list">
         {meetups.map((meetup) => {
           const meetupHref = meetup.bridgeRoom ? `/bridge/${meetup.bridgeRoom.id}` : `/meetups/${meetup.id}/manage`;
+          const bridgeRoomStatus = meetup.bridgeRoom?.status ?? null;
 
           return (
           <article className="admin-meetup-row" key={meetup.id}>
@@ -42,6 +50,7 @@ export default async function AdminMeetupsPage() {
                   </Link>
                 </strong>
                 {meetup.kind === "BRIDGE" ? <span className="badge green">브릿지</span> : null}
+                {bridgeRoomStatus ? <span className="badge">{bridgeRoomStatus}</span> : null}
               </div>
               <p className="muted">
                 {meetup.kind === "BRIDGE" ? "컨트랙트 브릿지" : meetup.game?.title ?? "게임 미정"} · {meetup.table.name} · {meetup.host.name} 개최 ·{" "}
@@ -55,7 +64,7 @@ export default async function AdminMeetupsPage() {
               <form action={completeMeetupAction}>
                 <input type="hidden" name="meetupId" value={meetup.id} />
                 <input type="hidden" name="returnTo" value="/admin/meetups" />
-                <button className="secondary-button">완료</button>
+                <button className="secondary-button">{meetup.kind === "BRIDGE" ? "세션 종료" : "완료"}</button>
               </form>
               <BridgeActionForm action={cancelMeetupWithAlertAction}>
                 <input type="hidden" name="meetupId" value={meetup.id} />

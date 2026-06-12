@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { deleteLoanAction } from "@/app/actions";
 import { prisma } from "@/lib/db";
+import { createKoreaDateFormatter } from "@/lib/date-time";
 
-const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
+const dateFormatter = createKoreaDateFormatter({
   month: "short",
   day: "numeric",
   hour: "2-digit",

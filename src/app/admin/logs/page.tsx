@@ -2,12 +2,13 @@ import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { pruneActivityLogsAction } from "@/app/actions";
 import { prisma } from "@/lib/db";
+import { createKoreaDateFormatter } from "@/lib/date-time";
 
 const LOG_PAGE_SIZE = 50;
 const ALL_LOG_SOURCE_LIMIT = 40;
 const ALL_LOG_DISPLAY_LIMIT = 50;
 
-const dateTimeFormatter = new Intl.DateTimeFormat("ko-KR", {
+const dateTimeFormatter = createKoreaDateFormatter({
   year: "numeric",
   month: "short",
   day: "numeric",

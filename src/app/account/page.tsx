@@ -5,9 +5,10 @@ import { RatingDialog } from "@/app/rating-dialog";
 import { StarRating } from "@/app/star-rating";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { createKoreaDateFormatter } from "@/lib/date-time";
 import { getRatingReasonLabel } from "@/lib/game-rating";
 
-const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
+const dateFormatter = createKoreaDateFormatter({
   month: "short",
   day: "numeric",
   hour: "2-digit",

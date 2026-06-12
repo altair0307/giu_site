@@ -12,18 +12,19 @@ import { RatingSummaryDialog } from "@/app/rating-summary-dialog";
 import { StarRating } from "@/app/star-rating";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { createKoreaDateFormatter } from "@/lib/date-time";
 import { matchesGameDetailFilters } from "@/lib/game-search";
 
 const PAGE_SIZE = 24;
 
-const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
+const dateFormatter = createKoreaDateFormatter({
   month: "short",
   day: "numeric",
   hour: "2-digit",
   minute: "2-digit"
 });
 
-const announcementDateFormatter = new Intl.DateTimeFormat("ko-KR", {
+const announcementDateFormatter = createKoreaDateFormatter({
   year: "numeric",
   month: "short",
   day: "numeric"
@@ -162,14 +163,21 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       where: {
         OR: [
           { startsAt: { gte: new Date() } },
-          { kind: "BRIDGE" }
+          {
+            kind: "BRIDGE",
+            bridgeRoom: {
+              is: {
+                status: { in: ["LOBBY", "PLAYING"] }
+              }
+            }
+          }
         ]
       },
       include: {
         host: { select: { name: true, loginId: true } },
         game: true,
         table: true,
-        bridgeRoom: { select: { id: true } },
+        bridgeRoom: { select: { id: true, status: true } },
         participants: {
           include: {
             user: { select: { id: true, name: true, loginId: true } }
@@ -458,6 +466,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 const joined = meetup.participants.some((participant) => participant.user.id === user.id);
                 const isFull = meetup.participants.length >= meetup.maxPeople;
                 const isBridgeMeetup = meetup.kind === "BRIDGE";
+                const bridgeRoomStatus = meetup.bridgeRoom?.status ?? null;
                 const canManageMeetup = meetup.hostId === user.id || user.role === "ADMIN";
                 const meetupHref = meetup.bridgeRoom ? `/bridge/${meetup.bridgeRoom.id}` : `/meetups/${meetup.id}/manage`;
                 const cardHref = joined || canManageMeetup ? meetupHref : `/meetups/${meetup.id}/join`;
@@ -471,6 +480,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                         </h3>
                         <div className="badge-row">
                           {isBridgeMeetup ? <span className="badge green">브릿지</span> : null}
+                          {bridgeRoomStatus ? <span className="badge">{bridgeRoomStatus}</span> : null}
                           <span className="badge">{meetup.participants.length}/{meetup.maxPeople}</span>
                         </div>
                       </div>

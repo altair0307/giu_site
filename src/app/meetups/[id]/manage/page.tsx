@@ -12,8 +12,9 @@ import { BridgeActionForm } from "@/app/bridge/[id]/bridge-action-form";
 import { MeetupAccessSync } from "@/app/meetups/[id]/meetup-access-sync";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { createKoreaDateFormatter } from "@/lib/date-time";
 
-const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
+const dateFormatter = createKoreaDateFormatter({
   dateStyle: "medium",
   timeStyle: "short"
 });
@@ -39,6 +40,7 @@ export default async function ManageMeetupPage({ params }: ManageMeetupPageProps
       bridgeRoom: {
         select: {
           id: true,
+          status: true,
           deals: { select: { id: true }, take: 1 }
         }
       },
@@ -91,7 +93,7 @@ export default async function ManageMeetupPage({ params }: ManageMeetupPageProps
             <div className="bridge-actions">
               {meetup.bridgeRoom ? (
                 <Link className="title-link" href={`/bridge/${meetup.bridgeRoom.id}`}>
-                  {meetup.title}
+                  {meetup.bridgeRoom.status === "COMPLETED" ? "브릿지 결과 보기" : meetup.title}
                 </Link>
               ) : (
                 <form action={createBridgeRoomAction}>
@@ -101,7 +103,11 @@ export default async function ManageMeetupPage({ params }: ManageMeetupPageProps
                   </button>
                 </form>
               )}
-              <p className="form-note">브릿지 방은 바로 열 수 있고, 참여자 4명이 모이면 딜을 생성할 수 있습니다.</p>
+              <p className="form-note">
+                {meetup.bridgeRoom?.status === "COMPLETED"
+                  ? "종료된 브릿지 세션은 결과 화면으로 남습니다."
+                  : "브릿지 방은 바로 열 수 있고, 참여자 4명이 모이면 딜을 생성할 수 있습니다."}
+              </p>
             </div>
           ) : null}
 
@@ -110,7 +116,7 @@ export default async function ManageMeetupPage({ params }: ManageMeetupPageProps
               <form action={completeMeetupAction}>
                 <input type="hidden" name="meetupId" value={meetup.id} />
                 <input type="hidden" name="returnTo" value="/" />
-                <button className="secondary-button">완료하고 목록에서 제거</button>
+                <button className="secondary-button">{meetup.kind === "BRIDGE" ? "세션 종료" : "완료하고 목록에서 제거"}</button>
               </form>
               <BridgeActionForm action={cancelMeetupWithAlertAction}>
                 <input type="hidden" name="meetupId" value={meetup.id} />

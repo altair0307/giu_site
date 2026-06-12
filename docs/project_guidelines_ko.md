@@ -101,6 +101,13 @@
 - Colima 기반 DB의 기본 접속 주소는 `postgresql://boardgame:boardgame@localhost:55433/boardgame_test?schema=public`입니다.
 - 전체 앱 컨테이너를 올릴 때는 `3000` 포트가 이미 사용 중인지 먼저 확인합니다.
 
+## 날짜와 시간 기준
+
+- DB의 `DateTime` 값은 UTC 순간값으로 저장하고, 사용자 화면과 알림은 `Asia/Seoul` 기준으로 표시합니다.
+- 서버 시스템 타임존에 의존하지 않고 `src/lib/date-time.ts`의 공통 포맷터를 사용합니다.
+- `datetime-local` 입력은 한국 시각으로 해석한 뒤 UTC 순간값으로 변환해 저장합니다.
+- 기존 날짜 데이터를 보정할 때는 자동 생성 시각과 사용자 입력 시각을 구분하고, 일괄 9시간 변경을 금지합니다.
+
 ## 변경 전 체크리스트
 
 - `git status --short`로 작업트리를 확인합니다.

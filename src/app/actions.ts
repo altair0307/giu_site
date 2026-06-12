@@ -2,6 +2,7 @@
 
 import bcrypt from "bcryptjs";
 import type { Prisma } from "@prisma/client";
+import { randomInt } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -24,10 +25,24 @@ const loginIdSchema = z
 const passwordSchema = z.string().min(8, "비밀번호는 8자 이상이어야 합니다.");
 const MAX_LOAN_PHOTO_SIZE = 8 * 1024 * 1024;
 const ALLOWED_LOAN_PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const BRIDGE_SEAT_POSITIONS = ["NORTH", "EAST", "SOUTH", "WEST"] as const;
+const BRIDGE_SUITS = ["S", "H", "D", "C"] as const;
+const BRIDGE_RANKS = ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2"] as const;
+const BRIDGE_CONTRACT_SUITS = ["CLUBS", "DIAMONDS", "HEARTS", "SPADES", "NOTRUMP"] as const;
+const BRIDGE_CALL_TYPES = ["PASS", "BID", "DOUBLE", "REDOUBLE"] as const;
+
+type BridgeSeatPositionValue = (typeof BRIDGE_SEAT_POSITIONS)[number];
+type BridgeSuitValue = (typeof BRIDGE_SUITS)[number];
+type BridgeRankValue = (typeof BRIDGE_RANKS)[number];
+type BridgeContractSuitValue = (typeof BRIDGE_CONTRACT_SUITS)[number];
+type BridgeCallTypeValue = (typeof BRIDGE_CALL_TYPES)[number];
+type BridgeDoubleStatusValue = "UNDOUBLED" | "DOUBLED" | "REDOUBLED";
+type BridgeVulnerabilityValue = "NONE" | "NS" | "EW" | "BOTH";
 
 export type ActionState = {
   ok?: boolean;
   message?: string;
+  redirectTo?: string;
 };
 
 function value(formData: FormData, name: string) {
@@ -40,6 +55,264 @@ function actionError(error: unknown, fallback: string) {
   }
 
   return error instanceof Error ? error.message : fallback;
+}
+
+function createShuffledBridgeDeck() {
+  const deck = BRIDGE_SUITS.flatMap((suit) => BRIDGE_RANKS.map((rank) => `${rank}${suit}`));
+
+  for (let index = deck.length - 1; index > 0; index -= 1) {
+    const swapIndex = randomInt(index + 1);
+    [deck[index], deck[swapIndex]] = [deck[swapIndex], deck[index]];
+  }
+
+  return deck;
+}
+
+function randomBridgeSeatPosition(takenPositions: string[]) {
+  const availablePositions = BRIDGE_SEAT_POSITIONS.filter((position) => !takenPositions.includes(position));
+
+  if (availablePositions.length === 0) {
+    return null;
+  }
+
+  return availablePositions[randomInt(availablePositions.length)];
+}
+
+function shuffledBridgeSeatPositions(count: number) {
+  const positions = [...BRIDGE_SEAT_POSITIONS];
+
+  for (let index = positions.length - 1; index > 0; index -= 1) {
+    const swapIndex = randomInt(index + 1);
+    [positions[index], positions[swapIndex]] = [positions[swapIndex], positions[index]];
+  }
+
+  return positions.slice(0, count);
+}
+
+function nextBridgeTurn(position: BridgeSeatPositionValue) {
+  return BRIDGE_SEAT_POSITIONS[(BRIDGE_SEAT_POSITIONS.indexOf(position) + 1) % BRIDGE_SEAT_POSITIONS.length];
+}
+
+function bridgePartner(position: BridgeSeatPositionValue) {
+  return BRIDGE_SEAT_POSITIONS[(BRIDGE_SEAT_POSITIONS.indexOf(position) + 2) % BRIDGE_SEAT_POSITIONS.length];
+}
+
+function bridgeTeam(position: BridgeSeatPositionValue) {
+  return position === "NORTH" || position === "SOUTH" ? "NS" : "EW";
+}
+
+function bridgeDealerForBoard(boardNumber: number) {
+  return BRIDGE_SEAT_POSITIONS[(boardNumber - 1) % BRIDGE_SEAT_POSITIONS.length];
+}
+
+function bridgeVulnerabilityForBoard(boardNumber: number): BridgeVulnerabilityValue {
+  const vulnerabilityCycle: BridgeVulnerabilityValue[] = [
+    "NONE",
+    "NS",
+    "EW",
+    "BOTH",
+    "NS",
+    "EW",
+    "BOTH",
+    "NONE",
+    "EW",
+    "BOTH",
+    "NONE",
+    "NS",
+    "BOTH",
+    "NONE",
+    "NS",
+    "EW"
+  ];
+
+  return vulnerabilityCycle[(boardNumber - 1) % vulnerabilityCycle.length];
+}
+
+function parseBridgeCard(card: string) {
+  const suit = card.slice(-1) as BridgeSuitValue;
+  const rank = card.slice(0, -1) as BridgeRankValue;
+
+  if (!BRIDGE_SUITS.includes(suit) || !BRIDGE_RANKS.includes(rank)) {
+    throw new Error("올바르지 않은 카드입니다.");
+  }
+
+  return { rank, suit };
+}
+
+function contractSuitToCardSuit(contractSuit: BridgeContractSuitValue) {
+  const suitMap = {
+    CLUBS: "C",
+    DIAMONDS: "D",
+    HEARTS: "H",
+    SPADES: "S",
+    NOTRUMP: null
+  } as const;
+
+  return suitMap[contractSuit];
+}
+
+function bridgeContractOrder(level: number, suit: BridgeContractSuitValue) {
+  return (level - 1) * BRIDGE_CONTRACT_SUITS.length + BRIDGE_CONTRACT_SUITS.indexOf(suit);
+}
+
+function bridgeVulnerabilityForTeam(team: ReturnType<typeof bridgeTeam>, vulnerability: BridgeVulnerabilityValue) {
+  return vulnerability === "BOTH" || vulnerability === team;
+}
+
+function readBridgeHands(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("손패 정보를 읽을 수 없습니다.");
+  }
+
+  return Object.fromEntries(
+    BRIDGE_SEAT_POSITIONS.map((position) => {
+      const cards = (value as Record<string, unknown>)[position];
+      return [position, Array.isArray(cards) ? cards.filter((card): card is string => typeof card === "string") : []];
+    })
+  ) as Record<BridgeSeatPositionValue, string[]>;
+}
+
+function chooseBridgeTrickWinner(
+  plays: { position: BridgeSeatPositionValue; card: string; createdAt: Date }[],
+  contractSuit: BridgeContractSuitValue
+) {
+  const orderedPlays = [...plays].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const leadSuit = parseBridgeCard(orderedPlays[0].card).suit;
+  const trumpSuit = contractSuitToCardSuit(contractSuit);
+
+  return orderedPlays.reduce((winner, play) => {
+    const winnerCard = parseBridgeCard(winner.card);
+    const playCard = parseBridgeCard(play.card);
+    const winnerIsTrump = trumpSuit !== null && winnerCard.suit === trumpSuit;
+    const playIsTrump = trumpSuit !== null && playCard.suit === trumpSuit;
+
+    if (playIsTrump && !winnerIsTrump) {
+      return play;
+    }
+
+    if (playIsTrump === winnerIsTrump && playCard.suit === winnerCard.suit) {
+      const playRank = BRIDGE_RANKS.indexOf(playCard.rank);
+      const winnerRank = BRIDGE_RANKS.indexOf(winnerCard.rank);
+
+      if (playRank < winnerRank) {
+        return play;
+      }
+    }
+
+    if (!winnerIsTrump && !playIsTrump && winnerCard.suit !== leadSuit && playCard.suit === leadSuit) {
+      return play;
+    }
+
+    return winner;
+  }, orderedPlays[0]).position;
+}
+
+function calculateBridgeContractResult({
+  contractLevel,
+  contractSuit,
+  declarerTricks,
+  doubleStatus = "UNDOUBLED",
+  vulnerable = false
+}: {
+  contractLevel: number;
+  contractSuit: BridgeContractSuitValue;
+  declarerTricks: number;
+  doubleStatus?: BridgeDoubleStatusValue;
+  vulnerable?: boolean;
+}) {
+  const targetTricks = contractLevel + 6;
+  const contractMade = declarerTricks >= targetTricks;
+  const overtricks = contractMade ? declarerTricks - targetTricks : 0;
+  const undertricks = contractMade ? 0 : targetTricks - declarerTricks;
+
+  if (!contractMade) {
+    if (doubleStatus === "UNDOUBLED") {
+      return {
+        contractMade,
+        overtricks,
+        undertricks,
+        score: undertricks * (vulnerable ? -100 : -50)
+      };
+    }
+
+    const doubledPenalty = Array.from({ length: undertricks }, (_, index) => {
+      if (vulnerable) {
+        return index === 0 ? 200 : 300;
+      }
+
+      if (index === 0) {
+        return 100;
+      }
+
+      return index < 3 ? 200 : 300;
+    }).reduce((sum, penalty) => sum + penalty, 0);
+    const multiplier = doubleStatus === "REDOUBLED" ? 2 : 1;
+
+    return {
+      contractMade,
+      overtricks,
+      undertricks,
+      score: doubledPenalty * multiplier * -1
+    };
+  }
+
+  const isMinor = contractSuit === "CLUBS" || contractSuit === "DIAMONDS";
+  const isNotrump = contractSuit === "NOTRUMP";
+  const baseTrickScore = isNotrump ? 40 + Math.max(0, contractLevel - 1) * 30 : contractLevel * (isMinor ? 20 : 30);
+  const scoreMultiplier = doubleStatus === "REDOUBLED" ? 4 : doubleStatus === "DOUBLED" ? 2 : 1;
+  const trickScore = baseTrickScore * scoreMultiplier;
+  const overtrickValue =
+    doubleStatus === "REDOUBLED"
+      ? vulnerable
+        ? 400
+        : 200
+      : doubleStatus === "DOUBLED"
+        ? vulnerable
+          ? 200
+          : 100
+        : isMinor
+          ? 20
+          : 30;
+  const insultBonus = doubleStatus === "REDOUBLED" ? 100 : doubleStatus === "DOUBLED" ? 50 : 0;
+  const gameBonus = trickScore >= 100 ? (vulnerable ? 500 : 300) : 50;
+  const slamBonus = contractLevel === 6 ? (vulnerable ? 750 : 500) : contractLevel === 7 ? (vulnerable ? 1500 : 1000) : 0;
+
+  return {
+    contractMade,
+    overtricks,
+    undertricks,
+    score: trickScore + overtricks * overtrickValue + insultBonus + gameBonus + slamBonus
+  };
+}
+
+async function createBridgeEvent(
+  tx: Prisma.TransactionClient,
+  input: {
+    roomId: string;
+    type:
+      | "ROOM_CREATED"
+      | "SEAT_JOINED"
+      | "SEAT_LEFT"
+      | "DEAL_CREATED"
+      | "CONTRACT_SET"
+      | "CALL_MADE"
+      | "CARD_PLAYED"
+      | "TRICK_COMPLETED"
+      | "ROUND_COMPLETED"
+      | "SEATS_RANDOMIZED"
+      | "SEATS_CHANGED";
+    actorId?: string;
+    payload?: Prisma.InputJsonValue;
+  }
+) {
+  await tx.bridgeEvent.create({
+    data: {
+      roomId: input.roomId,
+      type: input.type,
+      actorId: input.actorId,
+      payload: input.payload
+    }
+  });
 }
 
 async function readLoanPhoto(formData: FormData) {
@@ -1374,12 +1647,15 @@ export async function importGamesAction(_: ActionState, formData: FormData): Pro
 }
 
 export async function createMeetupAction(_: ActionState, formData: FormData): Promise<ActionState> {
+  let redirectTo: string | null = null;
+
   try {
     const user = await requireUser();
     assertRateLimit(`meetup:${user.id}`, 8, 60_000);
 
     const parsed = z
       .object({
+        kind: z.enum(["GENERAL", "BRIDGE"]).default("GENERAL"),
         title: z.string().trim().min(1).max(80),
         description: z.string().trim().max(300).optional(),
         startsAt: z.coerce.date(),
@@ -1388,6 +1664,7 @@ export async function createMeetupAction(_: ActionState, formData: FormData): Pr
         tableId: z.string().min(1, "테이블을 선택해주세요.")
       })
       .parse({
+        kind: value(formData, "kind") === "BRIDGE" ? "BRIDGE" : "GENERAL",
         title: value(formData, "title"),
         description: value(formData, "description") || undefined,
         startsAt: formData.get("startsAt"),
@@ -1395,20 +1672,25 @@ export async function createMeetupAction(_: ActionState, formData: FormData): Pr
         gameId: value(formData, "gameId") || undefined,
         tableId: value(formData, "tableId")
       });
+    const meetupData = {
+      ...parsed,
+      maxPeople: parsed.kind === "BRIDGE" ? 4 : parsed.maxPeople,
+      gameId: parsed.kind === "BRIDGE" ? undefined : parsed.gameId
+    };
 
-    if (parsed.startsAt < new Date()) {
+    if (meetupData.kind !== "BRIDGE" && meetupData.startsAt < new Date()) {
       return { message: "미래 시간으로 약속을 잡아주세요." };
     }
 
-    if (parsed.gameId) {
+    if (meetupData.gameId) {
       const [game, conflictingMeetup] = await Promise.all([
         prisma.game.findUnique({
-          where: { id: parsed.gameId },
+          where: { id: meetupData.gameId },
           select: { status: true }
         }),
         prisma.meetup.findFirst({
           where: {
-            gameId: parsed.gameId,
+            gameId: meetupData.gameId,
             startsAt: { gte: new Date() }
           },
           select: { id: true }
@@ -1424,10 +1706,10 @@ export async function createMeetupAction(_: ActionState, formData: FormData): Pr
       }
     }
 
-    await prisma.$transaction(async (tx) => {
+    const created = await prisma.$transaction(async (tx) => {
       const meetup = await tx.meetup.create({
         data: {
-          ...parsed,
+          ...meetupData,
           hostId: user.id
         }
       });
@@ -1439,6 +1721,55 @@ export async function createMeetupAction(_: ActionState, formData: FormData): Pr
         }
       });
 
+      let bridgeRoomId: string | null = null;
+
+      if (meetup.kind === "BRIDGE") {
+        const hostPosition = randomBridgeSeatPosition([]);
+        const room = await tx.bridgeRoom.create({
+          data: {
+            meetupId: meetup.id,
+            hostId: user.id,
+            seats: {
+              create: {
+                userId: user.id,
+                position: hostPosition ?? "NORTH"
+              }
+            }
+          }
+        });
+
+        bridgeRoomId = room.id;
+
+        await createBridgeEvent(tx, {
+          roomId: room.id,
+          type: "ROOM_CREATED",
+          actorId: user.id,
+          payload: {
+            meetupId: meetup.id,
+            seats: [{ position: hostPosition ?? "NORTH", userId: user.id }]
+          }
+        });
+
+        await createGeneralActivityLog(tx, {
+          category: "BRIDGE",
+          action: "ROOM_CREATE",
+          actor: user,
+          target: { type: "BRIDGE_ROOM", id: room.id, name: meetup.title },
+          message: `${user.name} 사용자가 브릿지 테이블을 열었습니다.`,
+          metadata: {
+            meetupId: meetup.id,
+            participants: [
+              {
+                position: hostPosition ?? "NORTH",
+                userId: user.id,
+                name: user.name,
+                loginId: user.loginId
+              }
+            ]
+          }
+        });
+      }
+
       const meetupForLog = await findMeetupForLog(tx, meetup.id);
 
       if (!meetupForLog) {
@@ -1446,14 +1777,1031 @@ export async function createMeetupAction(_: ActionState, formData: FormData): Pr
       }
 
       await createMeetupActivityLog(tx, "SCHEDULED", meetupForLog, new Date());
+
+      return {
+        meetupId: meetup.id,
+        bridgeRoomId
+      };
     });
 
     revalidatePath("/");
     revalidatePath("/admin");
     revalidatePath("/admin/logs");
-    return { ok: true, message: "게임 약속을 만들었습니다." };
+    redirectTo = created.bridgeRoomId ? `/bridge/${created.bridgeRoomId}` : `/meetups/${created.meetupId}/manage`;
   } catch (error) {
     return { message: actionError(error, "약속 생성에 실패했습니다.") };
+  }
+
+  redirect(redirectTo);
+}
+
+export async function createBridgeRoomAction(formData: FormData) {
+  const meetupId = value(formData, "meetupId");
+  const { user } = await requireMeetupManager(meetupId);
+  assertRateLimit(`bridge-room:${user.id}`, 10, 60_000);
+
+  const roomId = await prisma.$transaction(async (tx) => {
+    const meetup = await tx.meetup.findUnique({
+      where: { id: meetupId },
+      include: {
+        bridgeRoom: { select: { id: true } },
+        participants: {
+          include: { user: { select: { id: true, name: true, loginId: true } } },
+          orderBy: { createdAt: "asc" }
+        }
+      }
+    });
+
+    if (!meetup) {
+      throw new Error("약속을 찾을 수 없습니다.");
+    }
+
+    if (meetup.kind !== "BRIDGE") {
+      throw new Error("브릿지 약속에서만 테이블을 열 수 있습니다.");
+    }
+
+    if (meetup.bridgeRoom) {
+      return meetup.bridgeRoom.id;
+    }
+
+    const seatedParticipants = meetup.participants.slice(0, BRIDGE_SEAT_POSITIONS.length);
+    const positions = shuffledBridgeSeatPositions(seatedParticipants.length);
+    const room = await tx.bridgeRoom.create({
+      data: {
+        meetupId,
+        hostId: user.id,
+        seats: {
+          create: seatedParticipants.map((participant, index) => ({
+            userId: participant.userId,
+            position: positions[index]
+          }))
+        }
+      }
+    });
+
+    await createBridgeEvent(tx, {
+      roomId: room.id,
+      type: "ROOM_CREATED",
+      actorId: user.id,
+      payload: {
+        meetupId,
+        seats: seatedParticipants.map((participant, index) => ({
+          position: positions[index],
+          userId: participant.userId
+        }))
+      }
+    });
+
+    await createGeneralActivityLog(tx, {
+      category: "BRIDGE",
+      action: "ROOM_CREATE",
+      actor: user,
+      target: { type: "BRIDGE_ROOM", id: room.id, name: meetup.title },
+      message: `${user.name} 사용자가 브릿지 테이블을 열었습니다.`,
+      metadata: {
+        meetupId,
+        participants: seatedParticipants.map((participant, index) => ({
+          position: positions[index],
+          userId: participant.user.id,
+          name: participant.user.name,
+          loginId: participant.user.loginId
+        }))
+      }
+    });
+
+    return room.id;
+  });
+
+  revalidatePath("/");
+  revalidatePath(`/meetups/${meetupId}/manage`);
+  revalidatePath("/admin");
+  revalidatePath("/admin/logs");
+  redirect(`/bridge/${roomId}`);
+}
+
+export async function randomizeBridgeSeatsAction(formData: FormData) {
+  const user = await requireUser();
+  assertRateLimit(`bridge-seat-randomize:${user.id}`, 20, 60_000);
+
+  const roomId = value(formData, "roomId");
+
+  await prisma.$transaction(async (tx) => {
+    const room = await tx.bridgeRoom.findUnique({
+      where: { id: roomId },
+      include: {
+        deals: { select: { id: true }, take: 1 },
+        seats: {
+          include: { user: { select: { id: true, name: true, loginId: true } } },
+          orderBy: { createdAt: "asc" }
+        }
+      }
+    });
+
+    if (!room) {
+      throw new Error("브릿지 방을 찾을 수 없습니다.");
+    }
+
+    if (room.hostId !== user.id && user.role !== "ADMIN") {
+      throw new Error("방장 또는 관리자만 자리를 섞을 수 있습니다.");
+    }
+
+    if (room.status !== "LOBBY" || room.deals.length > 0) {
+      throw new Error("딜이 시작되기 전 로비에서만 자리를 섞을 수 있습니다.");
+    }
+
+    if (room.seats.length === 0) {
+      throw new Error("섞을 좌석이 없습니다.");
+    }
+
+    const positions = shuffledBridgeSeatPositions(room.seats.length);
+
+    await tx.bridgeSeat.deleteMany({ where: { roomId } });
+    await tx.bridgeSeat.createMany({
+      data: room.seats.map((seat, index) => ({
+        roomId,
+        userId: seat.userId,
+        position: positions[index]
+      }))
+    });
+
+    await createBridgeEvent(tx, {
+      roomId,
+      type: "SEATS_RANDOMIZED",
+      actorId: user.id,
+      payload: {
+        seats: room.seats.map((seat, index) => ({
+          position: positions[index],
+          userId: seat.userId
+        }))
+      }
+    });
+
+    await createGeneralActivityLog(tx, {
+      category: "BRIDGE",
+      action: "SEATS_RANDOMIZE",
+      actor: user,
+      target: { type: "BRIDGE_ROOM", id: roomId },
+      message: `${user.name} 사용자가 브릿지 좌석을 섞었습니다.`,
+      metadata: {
+        participants: room.seats.map((seat, index) => ({
+          position: positions[index],
+          userId: seat.user.id,
+          name: seat.user.name,
+          loginId: seat.user.loginId
+        }))
+      }
+    });
+  });
+
+  revalidatePath(`/bridge/${roomId}`);
+  revalidatePath("/admin/logs");
+}
+
+export async function changeBridgeSeatAction(_: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  assertRateLimit(`bridge-seat-change:${user.id}`, 30, 60_000);
+
+  try {
+    const roomId = value(formData, "roomId");
+    const targetUserId = value(formData, "userId");
+    const targetPosition = value(formData, "position") as BridgeSeatPositionValue;
+
+    if (!targetUserId) {
+      throw new Error("좌석을 변경할 사용자를 선택해주세요.");
+    }
+
+    if (!BRIDGE_SEAT_POSITIONS.includes(targetPosition)) {
+      throw new Error("이동할 좌석을 선택해주세요.");
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const room = await tx.bridgeRoom.findUnique({
+        where: { id: roomId },
+        include: {
+          deals: { select: { id: true }, take: 1 },
+          seats: {
+            include: { user: { select: { id: true, name: true, loginId: true } } },
+            orderBy: { createdAt: "asc" }
+          }
+        }
+      });
+
+      if (!room) {
+        throw new Error("브릿지 방을 찾을 수 없습니다.");
+      }
+
+      if (room.hostId !== user.id && user.role !== "ADMIN") {
+        throw new Error("방장 또는 관리자만 자리를 변경할 수 있습니다.");
+      }
+
+      if (room.status !== "LOBBY" || room.deals.length > 0) {
+        throw new Error("딜이 시작되기 전 로비에서만 자리를 변경할 수 있습니다.");
+      }
+
+      const movingSeat = room.seats.find((seat) => seat.userId === targetUserId);
+
+      if (!movingSeat) {
+        throw new Error("좌석에 앉은 참여자만 이동할 수 있습니다.");
+      }
+
+      if (movingSeat.position === targetPosition) {
+        throw new Error("이미 선택한 좌석에 앉아 있습니다.");
+      }
+
+      const targetSeat = room.seats.find((seat) => seat.position === targetPosition);
+      const nextSeats = room.seats.map((seat) => {
+        if (seat.userId === movingSeat.userId) {
+          return { ...seat, position: targetPosition };
+        }
+
+        if (targetSeat && seat.userId === targetSeat.userId) {
+          return { ...seat, position: movingSeat.position };
+        }
+
+        return seat;
+      });
+
+      await tx.bridgeSeat.deleteMany({ where: { roomId } });
+      await tx.bridgeSeat.createMany({
+        data: nextSeats.map((seat) => ({
+          roomId,
+          userId: seat.userId,
+          position: seat.position
+        }))
+      });
+
+      await createBridgeEvent(tx, {
+        roomId,
+        type: "SEATS_CHANGED",
+        actorId: user.id,
+        payload: {
+          movedUserId: movingSeat.userId,
+          from: movingSeat.position,
+          to: targetPosition,
+          swappedUserId: targetSeat?.userId ?? null,
+          seats: nextSeats.map((seat) => ({
+            position: seat.position,
+            userId: seat.userId
+          }))
+        }
+      });
+
+      await createGeneralActivityLog(tx, {
+        category: "BRIDGE",
+        action: "SEAT_CHANGE",
+        actor: user,
+        target: { type: "BRIDGE_ROOM", id: roomId },
+        message: `${user.name} 사용자가 브릿지 좌석을 변경했습니다.`,
+        metadata: {
+          movedUser: {
+            userId: movingSeat.user.id,
+            name: movingSeat.user.name,
+            loginId: movingSeat.user.loginId
+          },
+          from: movingSeat.position,
+          to: targetPosition,
+          swappedUser: targetSeat
+            ? {
+                userId: targetSeat.user.id,
+                name: targetSeat.user.name,
+                loginId: targetSeat.user.loginId
+              }
+            : null,
+          participants: nextSeats.map((seat) => ({
+            position: seat.position,
+            userId: seat.user.id,
+            name: seat.user.name,
+            loginId: seat.user.loginId
+          }))
+        }
+      });
+    });
+
+    revalidatePath(`/bridge/${roomId}`);
+    revalidatePath("/admin/logs");
+    return { ok: true };
+  } catch (error) {
+    return { message: actionError(error, "좌석 변경에 실패했습니다.") };
+  }
+}
+
+export async function createBridgeDealAction(formData: FormData) {
+  const user = await requireUser();
+  assertRateLimit(`bridge-deal:${user.id}`, 10, 60_000);
+
+  const roomId = value(formData, "roomId");
+
+  await prisma.$transaction(async (tx) => {
+    const room = await tx.bridgeRoom.findUnique({
+      where: { id: roomId },
+      include: {
+        deals: {
+          select: { id: true, boardNumber: true, completedAt: true },
+          orderBy: { boardNumber: "desc" }
+        },
+        seats: {
+          include: { user: { select: { id: true, name: true, loginId: true } } },
+          orderBy: { createdAt: "asc" }
+        }
+      }
+    });
+
+    if (!room) {
+      throw new Error("브릿지 방을 찾을 수 없습니다.");
+    }
+
+    if (room.hostId !== user.id && user.role !== "ADMIN") {
+      throw new Error("방장 또는 관리자만 딜을 생성할 수 있습니다.");
+    }
+
+    if (room.status !== "LOBBY" && room.status !== "PLAYING") {
+      throw new Error("진행 가능한 브릿지 방에서만 딜을 생성할 수 있습니다.");
+    }
+
+    const activeDeal = room.deals.find((deal) => !deal.completedAt);
+
+    if (activeDeal) {
+      throw new Error("진행 중인 딜이 있습니다.");
+    }
+
+    if (room.seats.length !== 4) {
+      throw new Error("좌석 4명이 모두 배정되어야 딜을 생성할 수 있습니다.");
+    }
+
+    const boardNumber = (room.deals[0]?.boardNumber ?? 0) + 1;
+    const dealer = bridgeDealerForBoard(boardNumber);
+    const vulnerability = bridgeVulnerabilityForBoard(boardNumber);
+    const positions = boardNumber === 1 ? shuffledBridgeSeatPositions(room.seats.length) : room.seats.map((seat) => seat.position);
+
+    if (boardNumber === 1) {
+      await tx.bridgeSeat.deleteMany({ where: { roomId } });
+      await tx.bridgeSeat.createMany({
+        data: room.seats.map((seat, index) => ({
+          roomId,
+          userId: seat.userId,
+          position: positions[index]
+        }))
+      });
+    }
+
+    const deck = createShuffledBridgeDeck();
+    const hands = Object.fromEntries(
+      BRIDGE_SEAT_POSITIONS.map((position, index) => [position, deck.slice(index * 13, (index + 1) * 13)])
+    );
+
+    await tx.bridgeDeal.create({
+      data: {
+        roomId,
+        boardNumber,
+        dealer,
+        biddingTurn: dealer,
+        vulnerability,
+        hands
+      }
+    });
+
+    await tx.bridgeRoom.update({
+      where: { id: roomId },
+      data: { status: "PLAYING" }
+    });
+
+    await createBridgeEvent(tx, {
+      roomId,
+      type: "DEAL_CREATED",
+      actorId: user.id,
+      payload: {
+        boardNumber,
+        dealer,
+        vulnerability,
+        seats: room.seats.map((seat, index) => ({
+          position: positions[index],
+          userId: seat.userId
+        }))
+      }
+    });
+
+    await createGeneralActivityLog(tx, {
+      category: "BRIDGE",
+      action: "DEAL_CREATE",
+      actor: user,
+      target: { type: "BRIDGE_ROOM", id: roomId },
+      message: `${user.name} 사용자가 브릿지 딜을 생성했습니다.`,
+      metadata: {
+        boardNumber,
+        dealer,
+        vulnerability,
+        participants: room.seats.map((seat, index) => ({
+          position: positions[index],
+          userId: seat.user.id,
+          name: seat.user.name,
+          loginId: seat.user.loginId
+        }))
+      }
+    });
+  });
+
+  revalidatePath(`/bridge/${roomId}`);
+  revalidatePath("/admin/logs");
+}
+
+export async function makeBridgeCallAction(_: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  assertRateLimit(`bridge-call:${user.id}`, 40, 60_000);
+
+  try {
+    const roomId = value(formData, "roomId");
+    const callType = value(formData, "callType") as BridgeCallTypeValue;
+    const level = Number(value(formData, "level"));
+    const suit = value(formData, "suit") as BridgeContractSuitValue;
+
+    if (!BRIDGE_CALL_TYPES.includes(callType)) {
+      throw new Error("올바르지 않은 콜입니다.");
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const room = await tx.bridgeRoom.findUnique({
+        where: { id: roomId },
+        include: {
+          deals: {
+            where: { completedAt: null },
+            take: 1,
+            include: {
+              calls: { orderBy: { sequence: "asc" } }
+            }
+          },
+          seats: true
+        }
+      });
+
+      const deal = room?.deals[0];
+
+      if (!room || !deal) {
+        throw new Error("딜이 생성된 뒤 비딩할 수 있습니다.");
+      }
+
+      if (room.status !== "PLAYING") {
+        throw new Error("진행 중인 방에서만 비딩할 수 있습니다.");
+      }
+
+      if (deal.contractLevel || deal.completedAt || !deal.biddingTurn) {
+        throw new Error("이미 비딩이 끝났습니다.");
+      }
+
+      const mySeat = room.seats.find((seat) => seat.userId === user.id)?.position;
+
+      if (!mySeat) {
+        throw new Error("좌석에 앉은 사용자만 비딩할 수 있습니다.");
+      }
+
+      if (mySeat !== deal.biddingTurn) {
+        throw new Error("현재 비딩 차례가 아닙니다.");
+      }
+
+      const calls = deal.calls;
+      const lastBid = [...calls].reverse().find((call) => call.type === "BID");
+      const lastBidTeam = lastBid ? bridgeTeam(lastBid.position) : null;
+      const myTeam = bridgeTeam(mySeat);
+      const nextSequence = calls.length + 1;
+      let nextDoubleStatus = deal.doubleStatus as BridgeDoubleStatusValue;
+      let callLevel: number | null = null;
+      let callSuit: BridgeContractSuitValue | null = null;
+
+      if (callType === "BID") {
+        if (!Number.isInteger(level) || level < 1 || level > 7) {
+          throw new Error("입찰 레벨은 1부터 7까지 선택해주세요.");
+        }
+
+        if (!BRIDGE_CONTRACT_SUITS.includes(suit)) {
+          throw new Error("입찰 무늬를 선택해주세요.");
+        }
+
+        if (lastBid?.level && lastBid.suit && bridgeContractOrder(level, suit) <= bridgeContractOrder(lastBid.level, lastBid.suit)) {
+          throw new Error("이전 입찰보다 높은 계약만 부를 수 있습니다.");
+        }
+
+        callLevel = level;
+        callSuit = suit;
+        nextDoubleStatus = "UNDOUBLED";
+      }
+
+      if (callType === "DOUBLE") {
+        if (!lastBid || !lastBidTeam || lastBidTeam === myTeam) {
+          throw new Error("상대 팀의 마지막 입찰에만 더블할 수 있습니다.");
+        }
+
+        if (deal.doubleStatus !== "UNDOUBLED") {
+          throw new Error("이미 더블 또는 리더블된 계약입니다.");
+        }
+
+        nextDoubleStatus = "DOUBLED";
+      }
+
+      if (callType === "REDOUBLE") {
+        if (!lastBid || !lastBidTeam || lastBidTeam !== myTeam || deal.doubleStatus !== "DOUBLED") {
+          throw new Error("상대가 더블한 우리 팀 계약에만 리더블할 수 있습니다.");
+        }
+
+        nextDoubleStatus = "REDOUBLED";
+      }
+
+      await tx.bridgeCall.create({
+        data: {
+          roomId,
+          dealId: deal.id,
+          position: mySeat,
+          type: callType,
+          level: callLevel,
+          suit: callSuit,
+          sequence: nextSequence
+        }
+      });
+
+      const updatedCalls = [
+        ...calls,
+        {
+          position: mySeat,
+          type: callType,
+          level: callLevel,
+          suit: callSuit,
+          sequence: nextSequence
+        }
+      ];
+      const updatedLastBid = [...updatedCalls].reverse().find((call) => call.type === "BID");
+      const trailingPasses = [...updatedCalls].reverse().findIndex((call) => call.type !== "PASS");
+      const passCount = trailingPasses === -1 ? updatedCalls.length : trailingPasses;
+      const allPassedOut = !updatedLastBid && updatedCalls.length >= 4;
+      const auctionComplete = Boolean(updatedLastBid && passCount >= 3);
+
+      if (allPassedOut) {
+        await tx.bridgeDeal.update({
+          where: { id: deal.id },
+          data: {
+            biddingTurn: null,
+            completedAt: new Date(),
+            score: 0
+          }
+        });
+      } else if (auctionComplete && updatedLastBid?.level && updatedLastBid.suit) {
+        const contractTeam = bridgeTeam(updatedLastBid.position);
+        const declarerCall = updatedCalls.find(
+          (call) => call.type === "BID" && call.suit === updatedLastBid.suit && bridgeTeam(call.position) === contractTeam
+        );
+        const declarer = declarerCall?.position;
+
+        if (!declarer) {
+          throw new Error("선언자를 결정할 수 없습니다.");
+        }
+
+        const dummy = bridgePartner(declarer);
+        const openingLeader = nextBridgeTurn(declarer);
+
+        await tx.bridgeDeal.update({
+          where: { id: deal.id },
+          data: {
+            biddingTurn: null,
+            contractLevel: updatedLastBid.level,
+            contractSuit: updatedLastBid.suit,
+            doubleStatus: nextDoubleStatus,
+            declarer,
+            dummy,
+            currentTurn: openingLeader,
+            playStartedAt: new Date()
+          }
+        });
+
+        await createBridgeEvent(tx, {
+          roomId,
+          type: "CONTRACT_SET",
+          actorId: user.id,
+          payload: {
+            contractLevel: updatedLastBid.level,
+            contractSuit: updatedLastBid.suit,
+            doubleStatus: nextDoubleStatus,
+            declarer,
+            dummy,
+            currentTurn: openingLeader
+          }
+        });
+      } else {
+        await tx.bridgeDeal.update({
+          where: { id: deal.id },
+          data: {
+            biddingTurn: nextBridgeTurn(mySeat),
+            doubleStatus: nextDoubleStatus
+          }
+        });
+      }
+
+      await createBridgeEvent(tx, {
+        roomId,
+        type: "CALL_MADE",
+        actorId: user.id,
+        payload: {
+          position: mySeat,
+          type: callType,
+          level: callLevel,
+          suit: callSuit,
+          sequence: nextSequence,
+          nextTurn: allPassedOut || auctionComplete ? null : nextBridgeTurn(mySeat)
+        }
+      });
+
+      if (allPassedOut) {
+        await createBridgeEvent(tx, {
+          roomId,
+          type: "ROUND_COMPLETED",
+          actorId: user.id,
+          payload: {
+            passedOut: true,
+            score: 0
+          }
+        });
+      }
+    });
+
+    revalidatePath(`/bridge/${roomId}`);
+    return { ok: true };
+  } catch (error) {
+    return { message: actionError(error, "비딩에 실패했습니다.") };
+  }
+}
+
+export async function setBridgeContractAction(_: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  assertRateLimit(`bridge-contract:${user.id}`, 20, 60_000);
+
+  try {
+    const roomId = value(formData, "roomId");
+    const contractLevel = Number(value(formData, "contractLevel"));
+    const contractSuit = value(formData, "contractSuit") as BridgeContractSuitValue;
+    const declarer = value(formData, "declarer") as BridgeSeatPositionValue;
+
+    if (!Number.isInteger(contractLevel) || contractLevel < 1 || contractLevel > 7) {
+      throw new Error("컨트랙트 레벨은 1부터 7까지 선택해주세요.");
+    }
+
+    if (!BRIDGE_CONTRACT_SUITS.includes(contractSuit)) {
+      throw new Error("컨트랙트 무늬를 선택해주세요.");
+    }
+
+    if (!BRIDGE_SEAT_POSITIONS.includes(declarer)) {
+      throw new Error("선언자를 선택해주세요.");
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const room = await tx.bridgeRoom.findUnique({
+        where: { id: roomId },
+        include: {
+          deals: {
+            where: { completedAt: null },
+            take: 1,
+            select: { id: true, contractLevel: true }
+          },
+          seats: true
+        }
+      });
+
+      const deal = room?.deals[0];
+
+      if (!room || !deal) {
+        throw new Error("딜이 생성된 방에서만 컨트랙트를 정할 수 있습니다.");
+      }
+
+      if (room.hostId !== user.id && user.role !== "ADMIN") {
+        throw new Error("방장 또는 관리자만 컨트랙트를 정할 수 있습니다.");
+      }
+
+      if (room.status !== "PLAYING") {
+        throw new Error("진행 중인 방에서만 컨트랙트를 정할 수 있습니다.");
+      }
+
+      if (deal.contractLevel) {
+        throw new Error("이미 컨트랙트가 정해졌습니다.");
+      }
+
+      if (room.seats.length !== 4 || !room.seats.some((seat) => seat.position === declarer)) {
+        throw new Error("좌석 4명이 모두 배정되어야 컨트랙트를 정할 수 있습니다.");
+      }
+
+      const dummy = bridgePartner(declarer);
+      const openingLeader = nextBridgeTurn(declarer);
+
+      await tx.bridgeDeal.update({
+        where: { id: deal.id },
+        data: {
+          contractLevel,
+          contractSuit,
+          declarer,
+          dummy,
+          currentTurn: openingLeader,
+          playStartedAt: new Date()
+        }
+      });
+
+      await createBridgeEvent(tx, {
+        roomId,
+        type: "CONTRACT_SET",
+        actorId: user.id,
+        payload: {
+          contractLevel,
+          contractSuit,
+          declarer,
+          dummy,
+          currentTurn: openingLeader
+        }
+      });
+    });
+
+    revalidatePath(`/bridge/${roomId}`);
+    return { ok: true };
+  } catch (error) {
+    return { message: actionError(error, "컨트랙트 확정에 실패했습니다.") };
+  }
+}
+
+export async function playBridgeCardAction(_: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  assertRateLimit(`bridge-play:${user.id}`, 60, 60_000);
+
+  try {
+    const roomId = value(formData, "roomId");
+    const card = value(formData, "card");
+    parseBridgeCard(card);
+
+    await prisma.$transaction(async (tx) => {
+      const room = await tx.bridgeRoom.findUnique({
+        where: { id: roomId },
+        include: {
+          deals: {
+            where: { completedAt: null },
+            take: 1
+          },
+          seats: true
+        }
+      });
+
+    const deal = room?.deals[0];
+
+    if (!room || !deal) {
+      throw new Error("딜이 생성된 방에서만 카드를 낼 수 있습니다.");
+    }
+
+    if (room.status !== "PLAYING") {
+      throw new Error("진행 중인 방에서만 카드를 낼 수 있습니다.");
+    }
+
+    if (deal.completedAt) {
+      throw new Error("이미 라운드가 끝났습니다.");
+    }
+
+    if (!deal.contractLevel || !deal.contractSuit || !deal.declarer || !deal.dummy || !deal.currentTurn) {
+      throw new Error("컨트랙트가 정해진 뒤 카드를 낼 수 있습니다.");
+    }
+
+    const mySeat = room.seats.find((seat) => seat.userId === user.id)?.position;
+
+    if (!mySeat) {
+      throw new Error("좌석에 앉은 사용자만 카드를 낼 수 있습니다.");
+    }
+
+    const currentTurn = deal.currentTurn;
+    const declarer = deal.declarer;
+    const dummy = deal.dummy;
+    const playedPosition = currentTurn;
+
+    if (currentTurn === dummy) {
+      if (mySeat !== declarer) {
+        throw new Error("더미 차례에는 선언자만 카드를 낼 수 있습니다.");
+      }
+    } else if (mySeat !== currentTurn) {
+      throw new Error("현재 차례가 아닙니다.");
+    }
+
+    const hands = readBridgeHands(deal.hands);
+    const hand = hands[playedPosition];
+
+    if (!hand.includes(card)) {
+      throw new Error("해당 좌석의 손패에 없는 카드입니다.");
+    }
+
+    let trick = await tx.bridgeTrick.findFirst({
+      where: {
+        dealId: deal.id,
+        completedAt: null
+      },
+      include: {
+        plays: { orderBy: { createdAt: "asc" } }
+      },
+      orderBy: { trickNumber: "desc" }
+    });
+
+    if (!trick) {
+      const trickCount = await tx.bridgeTrick.count({
+        where: { dealId: deal.id }
+      });
+
+      if (trickCount >= 13) {
+        throw new Error("이미 모든 트릭이 끝났습니다.");
+      }
+
+      trick = await tx.bridgeTrick.create({
+        data: {
+          roomId,
+          dealId: deal.id,
+          trickNumber: trickCount + 1,
+          leader: currentTurn
+        },
+        include: {
+          plays: { orderBy: { createdAt: "asc" } }
+        }
+      });
+    }
+
+    if (trick.plays.some((play) => play.position === playedPosition)) {
+      throw new Error("이미 이 트릭에 카드를 냈습니다.");
+    }
+
+    if (trick.plays.length > 0) {
+      const leadSuit = parseBridgeCard(trick.plays[0].card).suit;
+      const cardSuit = parseBridgeCard(card).suit;
+      const canFollowSuit = hand.some((handCard) => parseBridgeCard(handCard).suit === leadSuit);
+
+      if (canFollowSuit && cardSuit !== leadSuit) {
+        throw new Error("같은 무늬가 있으면 먼저 따라 내야 합니다.");
+      }
+    }
+
+    await tx.bridgePlay.create({
+      data: {
+        roomId,
+        dealId: deal.id,
+        trickId: trick.id,
+        position: playedPosition,
+        card
+      }
+    });
+
+    const updatedHand = hand.filter((handCard) => handCard !== card);
+    const updatedHands = {
+      ...hands,
+      [playedPosition]: updatedHand
+    };
+    const plays = await tx.bridgePlay.findMany({
+      where: { trickId: trick.id },
+      orderBy: { createdAt: "asc" }
+    });
+    const trickCompleted = plays.length === 4;
+    const winner = trickCompleted
+      ? chooseBridgeTrickWinner(
+          plays.map((play) => ({
+            position: play.position,
+            card: play.card,
+            createdAt: play.createdAt
+          })),
+          deal.contractSuit
+        )
+      : null;
+    const nextTurn = winner ?? nextBridgeTurn(playedPosition);
+    const roundCompleted = trickCompleted && winner !== null && trick.trickNumber === 13;
+    let roundResult:
+      | {
+          declarerTricks: number;
+          defenderTricks: number;
+          contractMade: boolean;
+          overtricks: number;
+          undertricks: number;
+          score: number;
+        }
+      | null = null;
+
+    if (roundCompleted && winner) {
+      const previousCompletedTricks = await tx.bridgeTrick.findMany({
+        where: {
+          dealId: deal.id,
+          completedAt: { not: null }
+        },
+        select: { winner: true }
+      });
+      const declarerTeam = bridgeTeam(deal.declarer);
+      const completedWinners = [...previousCompletedTricks.map((completedTrick) => completedTrick.winner), winner];
+      const declarerTricks = completedWinners.filter(
+        (completedWinner): completedWinner is BridgeSeatPositionValue =>
+          completedWinner !== null && bridgeTeam(completedWinner) === declarerTeam
+      ).length;
+      const defenderTricks = 13 - declarerTricks;
+      const contractResult = calculateBridgeContractResult({
+        contractLevel: deal.contractLevel,
+        contractSuit: deal.contractSuit,
+        declarerTricks,
+        doubleStatus: deal.doubleStatus,
+        vulnerable: bridgeVulnerabilityForTeam(declarerTeam, deal.vulnerability)
+      });
+
+      roundResult = {
+        declarerTricks,
+        defenderTricks,
+        ...contractResult
+      };
+    }
+
+    await tx.bridgeDeal.update({
+      where: { id: deal.id },
+      data: {
+        hands: updatedHands,
+        currentTurn: roundCompleted ? null : nextTurn,
+        completedAt: roundCompleted ? new Date() : undefined,
+        declarerTricks: roundResult?.declarerTricks,
+        defenderTricks: roundResult?.defenderTricks,
+        contractMade: roundResult?.contractMade,
+        overtricks: roundResult?.overtricks,
+        undertricks: roundResult?.undertricks,
+        score: roundResult?.score
+      }
+    });
+
+    if (trickCompleted && winner) {
+      await tx.bridgeTrick.update({
+        where: { id: trick.id },
+        data: {
+          winner,
+          completedAt: new Date()
+        }
+      });
+    }
+
+    await createBridgeEvent(tx, {
+      roomId,
+      type: "CARD_PLAYED",
+      actorId: user.id,
+      payload: {
+        trickNumber: trick.trickNumber,
+        position: playedPosition,
+        card,
+        nextTurn
+      }
+    });
+
+    if (trickCompleted && winner) {
+      await createBridgeEvent(tx, {
+        roomId,
+        type: "TRICK_COMPLETED",
+        actorId: user.id,
+        payload: {
+          trickNumber: trick.trickNumber,
+          winner,
+          nextTurn
+        }
+      });
+    }
+
+    if (roundCompleted && winner && roundResult) {
+      await createBridgeEvent(tx, {
+        roomId,
+        type: "ROUND_COMPLETED",
+        actorId: user.id,
+        payload: {
+          declarer: deal.declarer,
+          declarerTeam: bridgeTeam(deal.declarer),
+          doubleStatus: deal.doubleStatus,
+          vulnerability: deal.vulnerability,
+          declarerTricks: roundResult.declarerTricks,
+          defenderTricks: roundResult.defenderTricks,
+          contractMade: roundResult.contractMade,
+          overtricks: roundResult.overtricks,
+          undertricks: roundResult.undertricks,
+          score: roundResult.score
+        }
+      });
+
+      await createGeneralActivityLog(tx, {
+        category: "BRIDGE",
+        action: "ROUND_COMPLETE",
+        actor: user,
+        target: { type: "BRIDGE_ROOM", id: roomId },
+        message: `${user.name} 사용자가 브릿지 라운드를 완료했습니다.`,
+        metadata: {
+          declarer: deal.declarer,
+          declarerTeam: bridgeTeam(deal.declarer),
+          contractLevel: deal.contractLevel,
+          contractSuit: deal.contractSuit,
+          doubleStatus: deal.doubleStatus,
+          vulnerability: deal.vulnerability,
+          declarerTricks: roundResult.declarerTricks,
+          defenderTricks: roundResult.defenderTricks,
+          contractMade: roundResult.contractMade,
+          overtricks: roundResult.overtricks,
+          undertricks: roundResult.undertricks,
+          score: roundResult.score
+        }
+      });
+    }
+  });
+
+    revalidatePath(`/bridge/${roomId}`);
+    revalidatePath("/admin/logs");
+    return { ok: true };
+  } catch (error) {
+    return { message: actionError(error, "카드를 낼 수 없습니다.") };
   }
 }
 
@@ -1473,6 +2821,89 @@ async function requireMeetupManager(meetupId: string) {
   }
 
   return { user, meetup };
+}
+
+export async function joinMeetupAndGetTarget(meetupId: string) {
+  const user = await requireUser();
+  assertRateLimit(`join:${user.id}`, 20, 60_000);
+
+  let targetHref = `/meetups/${meetupId}/manage`;
+
+  await prisma.$transaction(async (tx) => {
+    const meetup = await tx.meetup.findUnique({
+      where: { id: meetupId },
+      include: {
+        bridgeRoom: {
+          include: {
+            seats: true,
+            deals: { select: { id: true }, take: 1 }
+          }
+        },
+        participants: true
+      }
+    });
+
+    if (!meetup) {
+      throw new Error("약속을 찾을 수 없습니다.");
+    }
+
+    const alreadyJoined = meetup.participants.some((participant) => participant.userId === user.id);
+    const canManageMeetup = meetup.hostId === user.id || user.role === "ADMIN";
+
+    if (!alreadyJoined && !canManageMeetup && meetup.participants.length >= meetup.maxPeople) {
+      throw new Error("정원이 찼습니다.");
+    }
+
+    if (!alreadyJoined && meetup.kind === "BRIDGE" && (meetup.bridgeRoom?.deals.length ?? 0) > 0) {
+      throw new Error("이미 딜이 시작된 브릿지 약속에는 참여할 수 없습니다.");
+    }
+
+    if (!alreadyJoined && !canManageMeetup) {
+      await tx.meetupParticipant.create({
+        data: {
+          meetupId,
+          userId: user.id
+        }
+      });
+    }
+
+    if (meetup.kind === "BRIDGE" && meetup.bridgeRoom) {
+      targetHref = `/bridge/${meetup.bridgeRoom.id}`;
+      const alreadySeated = meetup.bridgeRoom.seats.some((seat) => seat.userId === user.id);
+      const takenPositions = meetup.bridgeRoom.seats.map((seat) => seat.position);
+      const position = randomBridgeSeatPosition(takenPositions);
+
+      if (!alreadySeated && !canManageMeetup) {
+        if (!position) {
+          throw new Error("브릿지 좌석이 모두 찼습니다.");
+        }
+
+        await tx.bridgeSeat.create({
+          data: {
+            roomId: meetup.bridgeRoom.id,
+            userId: user.id,
+            position
+          }
+        });
+
+        await createBridgeEvent(tx, {
+          roomId: meetup.bridgeRoom.id,
+          type: "SEAT_JOINED",
+          actorId: user.id,
+          payload: {
+            position,
+            userId: user.id
+          }
+        });
+      }
+    }
+  });
+
+  revalidatePath("/");
+  revalidatePath("/admin");
+  revalidatePath(targetHref);
+
+  return targetHref;
 }
 
 export async function cancelMeetupAction(formData: FormData) {
@@ -1497,6 +2928,34 @@ export async function cancelMeetupAction(formData: FormData) {
   redirect(returnTo);
 }
 
+export async function cancelMeetupWithAlertAction(_: ActionState, formData: FormData): Promise<ActionState> {
+  const meetupId = value(formData, "meetupId");
+  const returnTo = value(formData, "returnTo") || "/";
+
+  try {
+    const { user } = await requireMeetupManager(meetupId);
+    assertRateLimit(`cancel-meetup:${user.id}`, 20, 60_000);
+
+    await prisma.$transaction(async (tx) => {
+      const meetupForLog = await findMeetupForLog(tx, meetupId);
+
+      if (!meetupForLog) {
+        throw new Error("이미 취소되었거나 찾을 수 없는 방입니다.");
+      }
+
+      await createMeetupActivityLog(tx, "CANCELED", meetupForLog, new Date());
+      await tx.meetup.delete({ where: { id: meetupId } });
+    });
+
+    revalidatePath("/");
+    revalidatePath("/admin");
+    revalidatePath("/admin/logs");
+    return { ok: true, message: "방을 취소했습니다.", redirectTo: returnTo };
+  } catch (error) {
+    return { message: actionError(error, "방을 취소할 수 없습니다."), redirectTo: returnTo };
+  }
+}
+
 export async function completeMeetupAction(formData: FormData) {
   const meetupId = value(formData, "meetupId");
   const returnTo = value(formData, "returnTo") || "/";
@@ -1519,53 +2978,143 @@ export async function completeMeetupAction(formData: FormData) {
   redirect(returnTo);
 }
 
-export async function joinMeetupAction(formData: FormData) {
-  const user = await requireUser();
-  assertRateLimit(`join:${user.id}`, 20, 60_000);
+async function leaveMeetupForUser(meetupId: string, targetUserId: string, actorId: string) {
+  let bridgeRoomId: string | null = null;
 
-  const meetupId = value(formData, "meetupId");
-  const meetup = await prisma.meetup.findUnique({
-    where: { id: meetupId },
-    include: { participants: true }
-  });
-
-  if (!meetup) {
-    throw new Error("약속을 찾을 수 없습니다.");
-  }
-
-  if (meetup.participants.length >= meetup.maxPeople) {
-    throw new Error("정원이 찼습니다.");
-  }
-
-  await prisma.meetupParticipant.upsert({
-    where: {
-      meetupId_userId: {
-        meetupId,
-        userId: user.id
+  await prisma.$transaction(async (tx) => {
+    const meetup = await tx.meetup.findUnique({
+      where: { id: meetupId },
+      include: {
+        bridgeRoom: {
+          include: {
+            seats: true,
+            deals: { select: { id: true }, take: 1 }
+          }
+        },
+        participants: true
       }
-    },
-    update: {},
-    create: {
-      meetupId,
-      userId: user.id
+    });
+
+    if (!meetup) {
+      throw new Error("약속을 찾을 수 없습니다.");
+    }
+
+    if (meetup?.kind === "BRIDGE" && (meetup.bridgeRoom?.deals.length ?? 0) > 0) {
+      throw new Error("이미 딜이 시작된 브릿지 약속에서는 나갈 수 없습니다.");
+    }
+
+    bridgeRoomId = meetup?.bridgeRoom?.id ?? null;
+    const leavingSeat = bridgeRoomId
+      ? await tx.bridgeSeat.findFirst({
+          where: {
+            roomId: bridgeRoomId,
+            userId: targetUserId
+          },
+          select: { position: true }
+        })
+      : null;
+
+    await tx.meetupParticipant.deleteMany({
+      where: {
+        meetupId,
+        userId: targetUserId
+      }
+    });
+
+    if (bridgeRoomId) {
+      await tx.bridgeSeat.deleteMany({
+        where: {
+          roomId: bridgeRoomId,
+          userId: targetUserId
+        }
+      });
+
+      if (leavingSeat || targetUserId !== actorId) {
+        await createBridgeEvent(tx, {
+          roomId: bridgeRoomId,
+          type: "SEAT_LEFT",
+          actorId,
+          payload: {
+            position: leavingSeat?.position ?? null,
+            userId: targetUserId
+          }
+        });
+      }
     }
   });
 
   revalidatePath("/");
   revalidatePath("/admin");
+  revalidatePath(`/meetups/${meetupId}/manage`);
+  if (bridgeRoomId) {
+    revalidatePath(`/bridge/${bridgeRoomId}`);
+  }
+
+  return bridgeRoomId;
+}
+
+export async function joinMeetupAction(formData: FormData) {
+  const meetupId = value(formData, "meetupId");
+  const targetHref = await joinMeetupAndGetTarget(meetupId);
+
+  redirect(targetHref);
 }
 
 export async function leaveMeetupAction(formData: FormData) {
   const user = await requireUser();
   assertRateLimit(`leave:${user.id}`, 20, 60_000);
 
-  await prisma.meetupParticipant.deleteMany({
-    where: {
-      meetupId: value(formData, "meetupId"),
-      userId: user.id
-    }
-  });
+  const meetupId = value(formData, "meetupId");
+  await leaveMeetupForUser(meetupId, user.id, user.id);
+}
 
-  revalidatePath("/");
-  revalidatePath("/admin");
+export async function leaveMeetupWithAlertAction(_: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  assertRateLimit(`leave:${user.id}`, 20, 60_000);
+
+  const meetupId = value(formData, "meetupId");
+  const returnTo = value(formData, "returnTo") || "/";
+
+  try {
+    await leaveMeetupForUser(meetupId, user.id, user.id);
+    return { ok: true, message: "방에서 나갔습니다.", redirectTo: returnTo };
+  } catch (error) {
+    return { message: actionError(error, "방에서 나갈 수 없습니다.") };
+  }
+}
+
+export async function removeMeetupParticipantAction(_: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requireUser();
+  assertRateLimit(`remove-participant:${actor.id}`, 30, 60_000);
+
+  const meetupId = value(formData, "meetupId");
+  const userId = value(formData, "userId");
+
+  try {
+    if (!userId) {
+      throw new Error("내보낼 참여자를 선택해주세요.");
+    }
+
+    const meetup = await prisma.meetup.findUnique({
+      where: { id: meetupId },
+      select: { hostId: true }
+    });
+
+    if (!meetup) {
+      throw new Error("방을 찾을 수 없습니다.");
+    }
+
+    if (meetup.hostId !== actor.id && actor.role !== "ADMIN") {
+      throw new Error("방장 또는 관리자만 참여자를 내보낼 수 있습니다.");
+    }
+
+    if (userId === meetup.hostId) {
+      throw new Error("방장은 내보낼 수 없습니다.");
+    }
+
+    await leaveMeetupForUser(meetupId, userId, actor.id);
+    return { ok: true, message: "참여자를 방에서 내보냈습니다." };
+  } catch (error) {
+    return { message: actionError(error, "참여자를 내보낼 수 없습니다.") };
+  }
 }

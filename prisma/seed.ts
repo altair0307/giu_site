@@ -31,6 +31,30 @@ async function main() {
     }
   });
 
+  await prisma.user.upsert({
+    where: { loginId: "bridge1" },
+    update: {},
+    create: {
+      loginId: "bridge1",
+      name: "브릿지테스터1",
+      studentId: "20240001",
+      passwordHash: memberPasswordHash,
+      role: "MEMBER"
+    }
+  });
+
+  await prisma.user.upsert({
+    where: { loginId: "bridge2" },
+    update: {},
+    create: {
+      loginId: "bridge2",
+      name: "브릿지테스터2",
+      studentId: "20240002",
+      passwordHash: memberPasswordHash,
+      role: "MEMBER"
+    }
+  });
+
   await prisma.gameTable.createMany({
     data: [
       { name: "원형 테이블", capacity: 4 },

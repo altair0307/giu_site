@@ -72,6 +72,14 @@
 - ExcelJS를 사용해 보드게임 목록 업로드/다운로드 기능을 구현했습니다.
 - Discord Webhook과 Railway Cron을 이용해 반납 요청 및 반납 지연 알림을 보낼 수 있도록 구성했습니다.
 
+## 향후 목표: 멀티플레이 컨트랙트 브릿지
+
+- 기존 게임 약속 기능을 브릿지 로비의 진입점으로 활용합니다.
+- 약속 참여자가 4명일 때 브릿지 테이블을 열고 좌석을 배정하는 흐름을 목표로 합니다.
+- 초기 버전은 현재 Next.js, Prisma, PostgreSQL, Railway 구조에 맞춰 DB 이벤트 로그와 polling 또는 SSE 기반 턴제 멀티플레이로 시작합니다.
+- 구현 순서는 약속 기반 로비, 브릿지 방과 좌석, 딜 생성과 손패 표시, 수동 컨트랙트 선택 후 플레이, 비딩과 점수 계산, 재접속/관전/운영 기능 순서로 진행합니다.
+- 상세 계획은 [멀티플레이 컨트랙트 브릿지 구현 목표](docs/bridge_multiplayer_plan_ko.md)를 기준으로 관리합니다.
+
 ## 결과
 
 - 동아리방 보드게임 720개 규모의 대여 가능 여부를 웹에서 검색하고 관리할 수 있게 했습니다.
@@ -136,6 +144,20 @@ npm install
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public"
 SESSION_SECRET="change-this-to-a-long-random-secret"
 DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
+```
+
+Docker Desktop 대신 Colima를 사용할 때는 Postgres만 컨테이너로 띄우고 앱은 로컬 Node.js에서 실행합니다.
+
+```bash
+colima start --cpu 4 --memory 6 --disk 60 --mount-type virtiofs
+docker context use colima
+docker compose -f docker-compose.test.yml up -d postgres
+```
+
+이 경우 `.env`의 DB 주소는 아래처럼 둡니다.
+
+```env
+DATABASE_URL="postgresql://boardgame:boardgame@localhost:55433/boardgame_test?schema=public"
 ```
 
 3. DB 마이그레이션

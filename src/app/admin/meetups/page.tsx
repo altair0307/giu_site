@@ -1,14 +1,21 @@
 import Link from "next/link";
-import { cancelMeetupAction, completeMeetupAction } from "@/app/actions";
+import { cancelMeetupWithAlertAction, completeMeetupAction } from "@/app/actions";
+import { BridgeActionForm } from "@/app/bridge/[id]/bridge-action-form";
 import { prisma } from "@/lib/db";
 
 export default async function AdminMeetupsPage() {
   const meetups = await prisma.meetup.findMany({
-    where: { startsAt: { gte: new Date() } },
+    where: {
+      OR: [
+        { startsAt: { gte: new Date() } },
+        { kind: "BRIDGE" }
+      ]
+    },
     include: {
       host: { select: { name: true, loginId: true } },
       game: true,
       table: true,
+      bridgeRoom: { select: { id: true } },
       participants: true
     },
     orderBy: { startsAt: "asc" },
@@ -22,12 +29,22 @@ export default async function AdminMeetupsPage() {
         <span>{meetups.length}개 예정</span>
       </div>
       <div className="admin-meetup-list">
-        {meetups.map((meetup) => (
+        {meetups.map((meetup) => {
+          const meetupHref = meetup.bridgeRoom ? `/bridge/${meetup.bridgeRoom.id}` : `/meetups/${meetup.id}/manage`;
+
+          return (
           <article className="admin-meetup-row" key={meetup.id}>
             <div>
-              <strong>{meetup.title}</strong>
+              <div className="card-header compact">
+                <strong>
+                  <Link className="title-link" href={meetupHref}>
+                    {meetup.title}
+                  </Link>
+                </strong>
+                {meetup.kind === "BRIDGE" ? <span className="badge green">브릿지</span> : null}
+              </div>
               <p className="muted">
-                {meetup.game?.title ?? "게임 미정"} · {meetup.table.name} · {meetup.host.name} 개최 ·{" "}
+                {meetup.kind === "BRIDGE" ? "컨트랙트 브릿지" : meetup.game?.title ?? "게임 미정"} · {meetup.table.name} · {meetup.host.name} 개최 ·{" "}
                 {meetup.participants.length}/{meetup.maxPeople}
               </p>
             </div>
@@ -40,14 +57,15 @@ export default async function AdminMeetupsPage() {
                 <input type="hidden" name="returnTo" value="/admin/meetups" />
                 <button className="secondary-button">완료</button>
               </form>
-              <form action={cancelMeetupAction}>
+              <BridgeActionForm action={cancelMeetupWithAlertAction}>
                 <input type="hidden" name="meetupId" value={meetup.id} />
                 <input type="hidden" name="returnTo" value="/admin/meetups" />
                 <button className="ghost-button">취소</button>
-              </form>
+              </BridgeActionForm>
             </div>
           </article>
-        ))}
+          );
+        })}
         {meetups.length === 0 ? <p className="empty">예정된 게임 약속이 없습니다.</p> : null}
       </div>
     </section>

@@ -2,8 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { GameStatus, Prisma } from "@prisma/client";
 import {
-  joinMeetupAction,
-  leaveMeetupAction,
+  createBridgeRoomAction,
   logoutAction,
 } from "@/app/actions";
 import { AnnouncementPopup } from "@/app/announcement-popup";
@@ -160,11 +159,17 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     }),
     prisma.loanRequest.count({ where: { status: "PENDING" } }),
     prisma.meetup.findMany({
-      where: { startsAt: { gte: new Date() } },
+      where: {
+        OR: [
+          { startsAt: { gte: new Date() } },
+          { kind: "BRIDGE" }
+        ]
+      },
       include: {
         host: { select: { name: true, loginId: true } },
         game: true,
         table: true,
+        bridgeRoom: { select: { id: true } },
         participants: {
           include: {
             user: { select: { id: true, name: true, loginId: true } }
@@ -452,34 +457,44 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               {meetups.map((meetup) => {
                 const joined = meetup.participants.some((participant) => participant.user.id === user.id);
                 const isFull = meetup.participants.length >= meetup.maxPeople;
+                const isBridgeMeetup = meetup.kind === "BRIDGE";
+                const canManageMeetup = meetup.hostId === user.id || user.role === "ADMIN";
+                const meetupHref = meetup.bridgeRoom ? `/bridge/${meetup.bridgeRoom.id}` : `/meetups/${meetup.id}/manage`;
+                const cardHref = joined || canManageMeetup ? meetupHref : `/meetups/${meetup.id}/join`;
 
                 return (
                   <article className="meetup-row" key={meetup.id}>
-                    <div>
+                    <Link className="meetup-card-main" href={cardHref} prefetch={false}>
                       <div className="card-header compact">
-                        <h3>{meetup.title}</h3>
-                        <span className="badge">{meetup.participants.length}/{meetup.maxPeople}</span>
+                        <h3>
+                          {meetup.title}
+                        </h3>
+                        <div className="badge-row">
+                          {isBridgeMeetup ? <span className="badge green">브릿지</span> : null}
+                          <span className="badge">{meetup.participants.length}/{meetup.maxPeople}</span>
+                        </div>
                       </div>
                       <p>
-                        {meetup.game?.title ?? "게임 미정"} · {meetup.table.name} · {dateFormatter.format(meetup.startsAt)}
+                        {isBridgeMeetup ? "컨트랙트 브릿지" : meetup.game?.title ?? "게임 미정"} · {meetup.table.name} · {dateFormatter.format(meetup.startsAt)}
                       </p>
                       {meetup.description ? <p className="muted">{meetup.description}</p> : null}
                       <p className="participants">
                         {meetup.participants.map((participant) => participant.user.name).join(", ")}
                       </p>
-                    </div>
+                    </Link>
                     <div className="row-actions">
-                      {meetup.hostId === user.id || user.role === "ADMIN" ? (
+                      {isBridgeMeetup && canManageMeetup && !meetup.bridgeRoom ? (
+                        <form action={createBridgeRoomAction}>
+                          <input type="hidden" name="meetupId" value={meetup.id} />
+                          <button className="secondary-button">브릿지 방 열기</button>
+                        </form>
+                      ) : null}
+                      {canManageMeetup ? (
                         <Link className="ghost-link" href={`/meetups/${meetup.id}/manage`}>
                           관리
                         </Link>
                       ) : null}
-                      <form action={joined ? leaveMeetupAction : joinMeetupAction}>
-                        <input type="hidden" name="meetupId" value={meetup.id} />
-                        <button className={joined ? "ghost-button" : "secondary-button"} disabled={!joined && isFull}>
-                          {joined ? "참여 취소" : isFull ? "마감" : "참여"}
-                        </button>
-                      </form>
+                      {isFull && !joined ? <span className="muted">마감</span> : null}
                     </div>
                   </article>
                 );

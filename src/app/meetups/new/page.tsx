@@ -7,6 +7,12 @@ import { prisma } from "@/lib/db";
 
 const GAME_PICKER_SIZE = 12;
 
+function toDatetimeLocalValue(date: Date) {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+
+  return localDate.toISOString().slice(0, 16);
+}
+
 type NewMeetupPageProps = {
   searchParams: Promise<{
     gameQ?: string;
@@ -25,6 +31,7 @@ export default async function NewMeetupPage({ searchParams }: NewMeetupPageProps
   const gameQ = (params.gameQ ?? "").trim();
   const page = Math.max(1, Number(params.page ?? "1") || 1);
   const now = new Date();
+  const nowInputValue = toDatetimeLocalValue(now);
   const gameWhere = {
     status: "AVAILABLE" as const,
     meetups: {
@@ -73,6 +80,23 @@ export default async function NewMeetupPage({ searchParams }: NewMeetupPageProps
 
       <section className="meetup-create-layout">
         <ActionForm title="약속 정보" submitLabel="약속 등록" action={createMeetupAction}>
+          <fieldset className="wide segmented-field">
+            <legend>약속 종류</legend>
+            <label>
+              <input type="radio" name="kind" value="GENERAL" defaultChecked />
+              <span>
+                <strong>일반 게임</strong>
+                <small>보드게임 약속을 만들고 참여자를 모집합니다.</small>
+              </span>
+            </label>
+            <label>
+              <input type="radio" name="kind" value="BRIDGE" />
+              <span>
+                <strong>컨트랙트 브릿지</strong>
+                <small>4명이 모이면 브릿지 테이블을 열 수 있습니다.</small>
+              </span>
+            </label>
+          </fieldset>
           <label className="wide">
             제목
             <input name="title" placeholder="오늘 저녁 스플렌더" required />
@@ -89,11 +113,13 @@ export default async function NewMeetupPage({ searchParams }: NewMeetupPageProps
           </label>
           <label>
             시작 시간
-            <input name="startsAt" type="datetime-local" required />
+            <input name="startsAt" type="datetime-local" defaultValue={nowInputValue} required />
+            <span className="field-hint">브릿지 약속은 현재 시간으로 바로 만들어도 됩니다.</span>
           </label>
           <label>
             최대 인원
             <input name="maxPeople" type="number" min="2" max="30" defaultValue="4" required />
+            <span className="field-hint">브릿지 약속은 저장 시 4명으로 고정됩니다.</span>
           </label>
           <label className="wide">
             설명

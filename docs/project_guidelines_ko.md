@@ -15,6 +15,7 @@
 - 회원용 주요 화면과 액션은 `src/app/page.tsx`, `src/app/actions.ts`를 중심으로 확인합니다.
 - 관리자 화면은 `src/app/admin/*` 아래에 기능별 페이지로 둡니다.
 - 약속 기능은 `src/app/meetups/*`와 `Meetup`, `MeetupParticipant`, `MeetupActivityLog` 모델을 함께 봅니다.
+- 브릿지 기능은 기존 약속 기능을 로비 진입점으로 활용하며, 세부 목표와 단계는 `docs/bridge_multiplayer_plan_ko.md`를 기준으로 확인합니다.
 - 공통 서버 로직은 `src/lib/*`에 둡니다.
 - DB 모델과 상태값은 `prisma/schema.prisma`에서 관리합니다.
 - 보드게임 엑셀 처리는 `src/lib/game-spreadsheet.ts`에 모읍니다.
@@ -34,6 +35,8 @@
 - 대여 가능 상태는 `Game.status`, 실제 대여 기록은 `Loan.status`, 승인 요청은 `LoanRequest.status`로 나뉩니다.
 - 상태 전이를 추가할 때는 관련 모델이 함께 바뀌어야 하는지 확인합니다.
 - 같은 게임을 동시에 대여하거나, 예정 약속이 있는 게임을 대여하는 상황을 막아야 합니다.
+- 브릿지처럼 여러 사용자가 동시에 상태를 바꾸는 기능은 좌석, 턴, 카드 소유권, 공개 정보 범위를 서버에서 검증합니다.
+- 브릿지 좌석은 참여 순서를 의미하지 않도록 랜덤 배정과 방장 좌석 섞기를 기준으로 하고, 딜 시작 시 서버에서 최종 방향을 확정합니다.
 - 대여 중인 게임이 있을 때 전체 게임 DB 교체처럼 운영 데이터가 꼬일 수 있는 작업은 차단합니다.
 - 모델 변경 시 Prisma migration을 만들고, 배포 DB에는 `npm run db:deploy`를 사용합니다.
 
@@ -43,6 +46,7 @@
 
 - 대여/반납 이력은 `createLoanActivityLog`를 사용합니다.
 - 약속 생성, 완료, 취소 이력은 `createMeetupActivityLog`를 사용합니다.
+- 브릿지 방 생성, 좌석 변경, 게임 종료처럼 운영자가 추적해야 하는 성공 동작은 범용 로그 또는 별도 브릿지 로그 기준을 정한 뒤 기록합니다.
 - 회원, 게임, 공지, 엑셀 import, 관리자 조작 등 일반 운영 이력은 `createGeneralActivityLog`를 사용합니다.
 - 로그에는 actor, target, message, metadata를 가능한 한 구체적으로 남깁니다.
 - 실패한 작업은 별도 장애 추적이 필요한 경우가 아니면 운영 로그보다 에러 처리와 사용자 메시지를 우선합니다.
@@ -70,6 +74,8 @@
 - 관리자 화면은 대시보드, 승인 대기, 대여 관리, 회원 관리, 약속 관리, 로그 관리처럼 기능별로 분리합니다.
 - 상태값은 텍스트만 두지 말고 사용자가 다음 행동 가능 여부를 알 수 있게 버튼과 안내를 함께 정리합니다.
 - 사진, 대여 상태, 반납 예정일처럼 운영 판단에 필요한 정보는 관리자 화면에서 바로 확인 가능해야 합니다.
+- 브릿지 카드 UI는 이미지 파일 52장을 직접 관리하기보다 rank/suit 데이터 기반 컴포넌트로 생성합니다.
+- 브릿지 테이블은 사용자 본인의 좌석을 하단에 두고, 선언자와 취약 팀을 시각적으로 명확히 표시합니다.
 - 모바일에서도 검색, 필터, 승인 버튼, 사진 미리보기가 겹치지 않는지 확인합니다.
 
 ## 보안과 개인정보
@@ -87,6 +93,13 @@
 - standalone 배포 흐름은 `npm run build`와 `scripts/prepare-standalone-static.mjs`를 기준으로 유지합니다.
 - 반납 지연 알림 Cron 서비스는 `railway.notify-loans.json` 설정을 확인합니다.
 - 배포 후 관리자 계정으로 로그인, 대여 요청 승인, 반납 요청 알림, 관리자 로그 화면을 최소 점검합니다.
+
+## 로컬 인프라 기준
+
+- 로컬 컨테이너 런타임은 Docker Desktop보다 Colima 기반 CLI 운영을 우선합니다.
+- 로컬 개발 DB는 `docker-compose.test.yml`의 `postgres` 서비스를 사용하고, 앱은 가능하면 로컬 Node.js에서 실행합니다.
+- Colima 기반 DB의 기본 접속 주소는 `postgresql://boardgame:boardgame@localhost:55433/boardgame_test?schema=public`입니다.
+- 전체 앱 컨테이너를 올릴 때는 `3000` 포트가 이미 사용 중인지 먼저 확인합니다.
 
 ## 변경 전 체크리스트
 

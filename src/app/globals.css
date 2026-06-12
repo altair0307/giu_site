@@ -537,6 +537,25 @@ h3 {
   color: var(--danger);
 }
 
+.title-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.title-link:hover {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.badge-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .meetup-list {
   display: grid;
   gap: 12px;
@@ -547,6 +566,21 @@ h3 {
   justify-content: space-between;
   gap: 16px;
   padding: 16px;
+}
+
+.meetup-card-main {
+  flex: 1 1 auto;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.meetup-card-main:hover h3 {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .participants {
@@ -575,6 +609,20 @@ label {
   color: var(--muted);
   font-size: 14px;
   font-weight: 700;
+}
+
+fieldset {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+legend {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
 }
 
 .wide,
@@ -613,6 +661,42 @@ textarea:focus {
 
 .checkbox-label input {
   width: auto;
+}
+
+.segmented-field {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.segmented-field legend {
+  grid-column: 1 / -1;
+}
+
+.segmented-field label {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+}
+
+.segmented-field input {
+  width: auto;
+}
+
+.segmented-field strong,
+.segmented-field small,
+.field-hint {
+  display: block;
+}
+
+.segmented-field small,
+.field-hint {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .primary-button,
@@ -1369,6 +1453,413 @@ textarea:focus {
   flex-wrap: wrap;
 }
 
+.bridge-actions {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+
+.bridge-room-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.bridge-table-panel,
+.bridge-status-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.bridge-summary,
+.stacked-form {
+  display: grid;
+  gap: 10px;
+}
+
+.bridge-lobby-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bridge-seat-change-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  padding: 12px;
+}
+
+.bridge-seat-change-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.bridge-participant-actions {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  padding: 12px;
+}
+
+.bridge-participant-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bridge-participant-action-row span {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.bridge-trick-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  padding: 10px 12px;
+  font-weight: 800;
+}
+
+.bridge-trick-count strong {
+  color: var(--primary);
+  font-size: 18px;
+}
+
+.bridge-result {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-weight: 800;
+}
+
+.bridge-result span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.bridge-result.made {
+  background: #effaf4;
+  border-color: #bfe8cf;
+  color: #146c3f;
+}
+
+.bridge-result.failed {
+  background: #fff4f2;
+  border-color: #f4c7bf;
+  color: #a83a2f;
+}
+
+.bridge-vulnerability.vulnerable,
+.vulnerable-seat {
+  color: var(--danger);
+  font-weight: 900;
+}
+
+.bridge-bidding-panel,
+.bridge-call-form {
+  display: grid;
+  gap: 12px;
+}
+
+.bridge-bidding-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  padding: 12px;
+}
+
+.bridge-call-buttons,
+.bridge-bid-row {
+  display: grid;
+  gap: 8px;
+}
+
+.bridge-call-buttons {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.bridge-bid-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+  align-items: end;
+}
+
+.bridge-call-history {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.bridge-call-item {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  padding: 10px;
+  min-height: 64px;
+}
+
+.bridge-call-item span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.bridge-call-item strong {
+  font-size: 18px;
+}
+
+.stacked-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.bridge-seat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-areas:
+    ". top ."
+    "left table right"
+    ". bottom .";
+  gap: 12px;
+  min-height: 360px;
+  align-items: center;
+}
+
+.bridge-seat {
+  min-height: 96px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  padding: 14px;
+  text-align: center;
+}
+
+.bridge-seat span,
+.bridge-seat small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.bridge-seat .bridge-played-marker {
+  color: var(--green);
+}
+
+.bridge-seat strong {
+  font-size: 18px;
+}
+
+.bridge-seat.top {
+  grid-area: top;
+}
+
+.bridge-seat.right {
+  grid-area: right;
+}
+
+.bridge-seat.bottom {
+  grid-area: bottom;
+}
+
+.bridge-seat.left {
+  grid-area: left;
+}
+
+.bridge-seat.declarer {
+  border-color: #f3c969;
+  box-shadow: 0 10px 22px rgba(194, 136, 22, 0.12);
+}
+
+.declarer-star {
+  margin-right: 4px;
+  color: #c28716;
+}
+
+.bridge-table-center {
+  grid-area: table;
+  min-height: 180px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.42);
+  padding: 10px;
+}
+
+.bridge-table-play {
+  width: 52px;
+  display: grid;
+  gap: 4px;
+  position: absolute;
+}
+
+.bridge-table-play > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.bridge-table-play.top {
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.bridge-table-play.right {
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.bridge-table-play.bottom {
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.bridge-table-play.left {
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.bridge-card-placeholder {
+  aspect-ratio: 5 / 7;
+  width: 100%;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.bridge-trick-result {
+  display: grid;
+  gap: 2px;
+  text-align: center;
+  font-size: 12px;
+}
+
+.bridge-trick-result strong {
+  font-size: 14px;
+}
+
+.bridge-hand {
+  display: grid;
+  grid-template-columns: repeat(13, minmax(44px, 1fr));
+  gap: 8px;
+}
+
+.bridge-hand form {
+  min-width: 0;
+}
+
+.bridge-trick-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: end;
+}
+
+.bridge-trick-card {
+  width: 72px;
+  display: grid;
+  gap: 6px;
+}
+
+.bridge-trick-card > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.bridge-trick-winner {
+  align-self: center;
+  color: var(--green);
+  font-weight: 900;
+}
+
+.playing-card {
+  position: relative;
+  aspect-ratio: 5 / 7;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(246, 249, 247, 0.84)),
+    var(--surface);
+  box-shadow: 0 8px 20px rgba(31, 42, 50, 0.08);
+  color: var(--text);
+}
+
+button.playing-card {
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.playing-card.playable {
+  border-color: rgba(31, 122, 84, 0.45);
+  box-shadow: 0 10px 24px rgba(31, 122, 84, 0.18);
+}
+
+.playing-card.playable:hover {
+  transform: translateY(-2px);
+}
+
+.playing-card.red {
+  color: var(--danger);
+}
+
+.playing-card-rank {
+  position: absolute;
+  top: 8%;
+  left: 10%;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.playing-card-suit {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  line-height: 1;
+}
+
 .participant-list {
   display: grid;
   gap: 8px;
@@ -1376,10 +1867,17 @@ textarea:focus {
 
 .participant-row {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   border-top: 1px solid var(--line);
   padding-top: 10px;
+}
+
+.participant-row > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
 }
 
 .meetup-create-layout {
@@ -1532,7 +2030,8 @@ textarea:focus {
   .announcement-admin-row,
   .log-maintenance,
   .manage-layout,
-  .meetup-create-layout {
+  .meetup-create-layout,
+  .bridge-room-layout {
     grid-template-columns: 1fr;
   }
 
@@ -1577,6 +2076,31 @@ textarea:focus {
   }
 
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .segmented-field {
+    grid-template-columns: 1fr;
+  }
+
+  .bridge-seat-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "top"
+      "right"
+      "bottom"
+      "left";
+    min-height: 0;
+  }
+
+  .bridge-hand {
+    grid-template-columns: repeat(7, minmax(36px, 1fr));
+  }
+
+  .bridge-call-buttons,
+  .bridge-bid-row,
+  .bridge-call-history,
+  .bridge-seat-change-form {
     grid-template-columns: 1fr;
   }
 

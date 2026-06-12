@@ -49,6 +49,67 @@ enum MeetupActivityType {
   CANCELED
 }
 
+enum MeetupKind {
+  GENERAL
+  BRIDGE
+}
+
+enum BridgeRoomStatus {
+  LOBBY
+  PLAYING
+  COMPLETED
+  CANCELED
+}
+
+enum BridgeSeatPosition {
+  NORTH
+  EAST
+  SOUTH
+  WEST
+}
+
+enum BridgeEventType {
+  ROOM_CREATED
+  SEAT_JOINED
+  SEAT_LEFT
+  DEAL_CREATED
+  CONTRACT_SET
+  CALL_MADE
+  CARD_PLAYED
+  TRICK_COMPLETED
+  ROUND_COMPLETED
+  SEATS_RANDOMIZED
+  SEATS_CHANGED
+}
+
+enum BridgeContractSuit {
+  CLUBS
+  DIAMONDS
+  HEARTS
+  SPADES
+  NOTRUMP
+}
+
+enum BridgeCallType {
+  PASS
+  BID
+  DOUBLE
+  REDOUBLE
+}
+
+enum BridgeDoubleStatus {
+  UNDOUBLED
+  DOUBLED
+  REDOUBLED
+}
+
+enum BridgeVulnerability {
+  NONE
+  NS
+  EW
+  BOTH
+}
+
 enum RatingPlayedStatus {
   VERIFIED
   SELF_REPORTED
@@ -86,6 +147,8 @@ model User {
   meetups              Meetup[]
   participants         MeetupParticipant[]
   sessions             Session[]
+  hostedBridgeRooms    BridgeRoom[]
+  bridgeSeats          BridgeSeat[]
 
   @@index([loginId])
   @@index([studentId])
@@ -127,19 +190,19 @@ model Game {
 }
 
 model GameRating {
-  id           String              @id @default(cuid())
+  id           String             @id @default(cuid())
   gameId       String
   userId       String
   score        Float
-  playedStatus RatingPlayedStatus  @default(UNVERIFIED)
-  trustWeight  Float               @default(0.5)
+  playedStatus RatingPlayedStatus @default(UNVERIFIED)
+  trustWeight  Float              @default(0.5)
   reasonTags   String[]
   comment      String?
-  isHidden     Boolean             @default(false)
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
-  game         Game                @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isHidden     Boolean            @default(false)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  game         Game               @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([gameId, userId])
   @@index([userId])
@@ -216,18 +279,18 @@ model LoanPhoto {
 }
 
 model LoanActivityLog {
-  id              String           @id @default(cuid())
-  type            LoanActivityType
-  loanId          String?
-  gameId          String?
-  gameTitle       String
-  borrowerId      String?
-  borrowerName    String
-  borrowerLoginId String?
+  id                String           @id @default(cuid())
+  type              LoanActivityType
+  loanId            String?
+  gameId            String?
+  gameTitle         String
+  borrowerId        String?
+  borrowerName      String
+  borrowerLoginId   String?
   borrowerStudentId String?
-  occurredAt      DateTime
-  dueAt           DateTime?
-  createdAt       DateTime         @default(now())
+  occurredAt        DateTime
+  dueAt             DateTime?
+  createdAt         DateTime         @default(now())
 
   @@index([type])
   @@index([occurredAt])
@@ -237,6 +300,7 @@ model LoanActivityLog {
 
 model Meetup {
   id           String              @id @default(cuid())
+  kind         MeetupKind          @default(GENERAL)
   title        String
   description  String?
   startsAt     DateTime
@@ -249,7 +313,9 @@ model Meetup {
   game         Game?               @relation(fields: [gameId], references: [id], onDelete: SetNull)
   table        GameTable           @relation(fields: [tableId], references: [id], onDelete: Restrict)
   participants MeetupParticipant[]
+  bridgeRoom   BridgeRoom?
 
+  @@index([kind])
   @@index([startsAt])
   @@index([hostId])
   @@index([tableId])
@@ -268,30 +334,166 @@ model MeetupParticipant {
 }
 
 model MeetupActivityLog {
-  id           String             @id @default(cuid())
-  type         MeetupActivityType
-  meetupId     String?
-  title        String
-  description  String?
-  startsAt     DateTime
-  maxPeople    Int
-  gameId       String?
-  gameTitle    String?
-  tableId      String?
-  tableName    String?
-  hostId       String?
-  hostName     String
-  hostLoginId  String?
-  participants Json
+  id               String             @id @default(cuid())
+  type             MeetupActivityType
+  meetupId         String?
+  title            String
+  description      String?
+  startsAt         DateTime
+  maxPeople        Int
+  gameId           String?
+  gameTitle        String?
+  tableId          String?
+  tableName        String?
+  hostId           String?
+  hostName         String
+  hostLoginId      String?
+  participants     Json
   participantCount Int
-  occurredAt   DateTime
-  createdAt    DateTime           @default(now())
+  occurredAt       DateTime
+  createdAt        DateTime           @default(now())
 
   @@index([type])
   @@index([startsAt])
   @@index([occurredAt])
   @@index([gameId])
   @@index([hostId])
+}
+
+model BridgeRoom {
+  id        String           @id @default(cuid())
+  meetupId  String           @unique
+  hostId    String
+  status    BridgeRoomStatus @default(LOBBY)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  meetup    Meetup           @relation(fields: [meetupId], references: [id], onDelete: Cascade)
+  host      User             @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  seats     BridgeSeat[]
+  deals     BridgeDeal[]
+  events    BridgeEvent[]
+  tricks    BridgeTrick[]
+
+  @@index([status])
+  @@index([hostId])
+}
+
+model BridgeSeat {
+  id        String             @id @default(cuid())
+  roomId    String
+  userId    String
+  position  BridgeSeatPosition
+  createdAt DateTime           @default(now())
+  room      BridgeRoom         @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, position])
+  @@unique([roomId, userId])
+  @@index([userId])
+}
+
+model BridgeDeal {
+  id             String              @id @default(cuid())
+  roomId         String
+  boardNumber    Int                 @default(1)
+  dealer         BridgeSeatPosition
+  vulnerability  BridgeVulnerability @default(NONE)
+  hands          Json
+  biddingTurn    BridgeSeatPosition?
+  contractLevel  Int?
+  contractSuit   BridgeContractSuit?
+  doubleStatus   BridgeDoubleStatus  @default(UNDOUBLED)
+  declarer       BridgeSeatPosition?
+  dummy          BridgeSeatPosition?
+  currentTurn    BridgeSeatPosition?
+  playStartedAt  DateTime?
+  completedAt    DateTime?
+  declarerTricks Int?
+  defenderTricks Int?
+  contractMade   Boolean?
+  overtricks     Int?
+  undertricks    Int?
+  score          Int?
+  createdAt      DateTime            @default(now())
+  room           BridgeRoom          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  calls          BridgeCall[]
+  tricks         BridgeTrick[]
+  plays          BridgePlay[]
+
+  @@unique([roomId, boardNumber])
+  @@index([roomId])
+  @@index([dealer])
+  @@index([biddingTurn])
+  @@index([currentTurn])
+  @@index([completedAt])
+}
+
+model BridgeCall {
+  id        String              @id @default(cuid())
+  roomId    String
+  dealId    String
+  position  BridgeSeatPosition
+  type      BridgeCallType
+  level     Int?
+  suit      BridgeContractSuit?
+  sequence  Int
+  createdAt DateTime            @default(now())
+  deal      BridgeDeal          @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  @@unique([dealId, sequence])
+  @@index([roomId])
+  @@index([dealId])
+  @@index([position])
+}
+
+model BridgeEvent {
+  id        String          @id @default(cuid())
+  roomId    String
+  type      BridgeEventType
+  actorId   String?
+  payload   Json?
+  createdAt DateTime        @default(now())
+  room      BridgeRoom      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, createdAt])
+  @@index([roomId, id])
+  @@index([type])
+}
+
+model BridgeTrick {
+  id          String              @id @default(cuid())
+  roomId      String
+  dealId      String
+  trickNumber Int
+  leader      BridgeSeatPosition
+  winner      BridgeSeatPosition?
+  completedAt DateTime?
+  createdAt   DateTime            @default(now())
+  room        BridgeRoom          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  deal        BridgeDeal          @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  plays       BridgePlay[]
+
+  @@unique([dealId, trickNumber])
+  @@index([roomId])
+  @@index([winner])
+}
+
+model BridgePlay {
+  id        String             @id @default(cuid())
+  roomId    String
+  dealId    String
+  trickId   String
+  position  BridgeSeatPosition
+  card      String
+  createdAt DateTime           @default(now())
+  deal      BridgeDeal         @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  trick     BridgeTrick        @relation(fields: [trickId], references: [id], onDelete: Cascade)
+
+  @@unique([trickId, position])
+  @@unique([dealId, card])
+  @@index([roomId])
+  @@index([dealId])
+  @@index([position])
 }
 
 model NotificationLog {
@@ -333,20 +535,20 @@ model Announcement {
 }
 
 model GeneralActivityLog {
-  id              String   @id @default(cuid())
-  category        String
-  action          String
-  actorId         String?
-  actorName       String?
-  actorLoginId    String?
-  actorRole       String?
-  targetType      String?
-  targetId        String?
-  targetName      String?
-  message         String
-  metadata        Json?
-  occurredAt      DateTime
-  createdAt       DateTime @default(now())
+  id           String   @id @default(cuid())
+  category     String
+  action       String
+  actorId      String?
+  actorName    String?
+  actorLoginId String?
+  actorRole    String?
+  targetType   String?
+  targetId     String?
+  targetName   String?
+  message      String
+  metadata     Json?
+  occurredAt   DateTime
+  createdAt    DateTime @default(now())
 
   @@index([category])
   @@index([action])

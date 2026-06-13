@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { deleteLoanAction } from "@/app/actions";
 import { prisma } from "@/lib/db";
@@ -68,13 +69,25 @@ export default async function AdminLoansPage({ searchParams }: AdminLoansPagePro
                 <div className="loan-photo-grid">
                   {borrowPhoto ? (
                     <Link className="photo-preview-link" href={`/loan-photos/${borrowPhoto.id}`} target="_blank">
-                      <img alt={`${loan.game.title} 대여 사진`} src={`/loan-photos/${borrowPhoto.id}`} />
+                      <Image
+                        alt={`${loan.game.title} 대여 사진`}
+                        src={`/loan-photos/${borrowPhoto.id}`}
+                        width={132}
+                        height={88}
+                        unoptimized
+                      />
                       <span>대여 사진</span>
                     </Link>
                   ) : null}
                   {returnPhotos.map((photo, index) => (
                     <Link className="photo-preview-link" href={`/loan-photos/${photo.id}`} target="_blank" key={photo.id}>
-                      <img alt={`${loan.game.title} 반납 사진 ${index + 1}`} src={`/loan-photos/${photo.id}`} />
+                      <Image
+                        alt={`${loan.game.title} 반납 사진 ${index + 1}`}
+                        src={`/loan-photos/${photo.id}`}
+                        width={132}
+                        height={88}
+                        unoptimized
+                      />
                       <span>반납 사진 {index + 1}</span>
                     </Link>
                   ))}

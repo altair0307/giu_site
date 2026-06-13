@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { approveLoanRequestAction, rejectLoanRequestAction } from "@/app/actions";
 import { prisma } from "@/lib/db";
@@ -88,9 +89,12 @@ export default async function AdminPage() {
                 </p>
                 {request.photos[0] || request.loan?.photos[0] ? (
                   <a className="photo-preview-link" href={`/loan-photos/${request.photos[0]?.id ?? request.loan?.photos[0]?.id}`} target="_blank">
-                    <img
+                    <Image
                       alt={`${request.game.title} ${request.type === "RETURN" ? "반납" : "대여"} 사진`}
                       src={`/loan-photos/${request.photos[0]?.id ?? request.loan?.photos[0]?.id}`}
+                      width={132}
+                      height={88}
+                      unoptimized
                     />
                     <span>업로드 사진 확인</span>
                   </a>

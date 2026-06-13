@@ -1982,6 +1982,21 @@ button.playing-card {
   font-size: 28px;
 }
 
+.error-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.error-action {
+  display: inline-flex;
+  width: auto;
+  min-height: 40px;
+  align-items: center;
+  justify-self: start;
+  text-decoration: none;
+}
+
 .auth-panel {
   width: min(420px, calc(100vw - 32px));
   display: grid;

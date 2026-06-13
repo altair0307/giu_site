@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { safeAdminPath } from "@/lib/navigation";
 import { assertRateLimit } from "@/lib/rate-limit";
 
 function value(formData: FormData, name: string) {
@@ -16,10 +17,6 @@ function actionError(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
-function safeReturnTo(raw: string) {
-  return raw.startsWith("/admin") ? raw : "/admin";
-}
-
 function redirectTo(location: string) {
   return new NextResponse(null, {
     status: 303,
@@ -28,7 +25,7 @@ function redirectTo(location: string) {
 }
 
 function redirectWithStatus(returnTo: string, params: Record<string, string>) {
-  const [pathAndQuery, hash = ""] = safeReturnTo(returnTo).split("#");
+  const [pathAndQuery, hash = ""] = safeAdminPath(returnTo).split("#");
   const [pathname, query = ""] = pathAndQuery.split("?");
   const searchParams = new URLSearchParams(query);
 

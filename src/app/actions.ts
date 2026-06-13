@@ -21,6 +21,7 @@ import { prisma } from "@/lib/db";
 import { parseKoreaDateTimeLocal } from "@/lib/date-time";
 import { NEGATIVE_RATING_REASON_VALUES, POSITIVE_RATING_REASON_VALUES, RATING_REASON_VALUES } from "@/lib/game-rating";
 import { parseGameWorkbook } from "@/lib/game-spreadsheet";
+import { safeInternalPath } from "@/lib/navigation";
 import { notifyLoanBorrowed, notifyReturnRequested } from "@/lib/notifications";
 import { assertRateLimit } from "@/lib/rate-limit";
 import { getClientKey } from "@/lib/request";
@@ -2061,7 +2062,7 @@ export async function joinMeetupAndGetTarget(meetupId: string) {
 
 export async function cancelMeetupAction(formData: FormData) {
   const meetupId = value(formData, "meetupId");
-  const returnTo = value(formData, "returnTo") || "/";
+  const returnTo = safeInternalPath(value(formData, "returnTo"));
   const { user } = await requireMeetupManager(meetupId);
   assertRateLimit(`cancel-meetup:${user.id}`, 20, 60_000);
 
@@ -2083,7 +2084,7 @@ export async function cancelMeetupAction(formData: FormData) {
 
 export async function cancelMeetupWithAlertAction(_: ActionState, formData: FormData): Promise<ActionState> {
   const meetupId = value(formData, "meetupId");
-  const returnTo = value(formData, "returnTo") || "/";
+  const returnTo = safeInternalPath(value(formData, "returnTo"));
 
   try {
     const { user } = await requireMeetupManager(meetupId);
@@ -2111,7 +2112,7 @@ export async function cancelMeetupWithAlertAction(_: ActionState, formData: Form
 
 export async function completeMeetupAction(formData: FormData) {
   const meetupId = value(formData, "meetupId");
-  const returnTo = value(formData, "returnTo") || "/";
+  const returnTo = safeInternalPath(value(formData, "returnTo"));
   const { user } = await requireMeetupManager(meetupId);
   assertRateLimit(`complete-meetup:${user.id}`, 20, 60_000);
   let bridgeRoomId: string | null = null;
@@ -2250,7 +2251,7 @@ export async function leaveMeetupWithAlertAction(_: ActionState, formData: FormD
   assertRateLimit(`leave:${user.id}`, 20, 60_000);
 
   const meetupId = value(formData, "meetupId");
-  const returnTo = value(formData, "returnTo") || "/";
+  const returnTo = safeInternalPath(value(formData, "returnTo"));
 
   try {
     await leaveMeetupForUser(meetupId, user.id, user);

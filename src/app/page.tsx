@@ -42,6 +42,7 @@ type HomePageProps = {
     genre?: string;
     weight?: string;
     page?: string;
+    meetupError?: string;
   }>;
 };
 
@@ -53,6 +54,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   }
 
   const params = await searchParams;
+  const meetupError = (params.meetupError ?? "").trim();
   const q = (params.q ?? "").trim();
   const playerCount = (params.playerCount ?? "").trim();
   const bestPlayerCount = (params.bestPlayerCount ?? "").trim();
@@ -299,6 +301,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </form>
         </div>
       </header>
+
+      {meetupError ? <p className="notice error-notice">{meetupError}</p> : null}
 
       <section className="stats-grid">
         <div className="stat">

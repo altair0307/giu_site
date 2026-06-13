@@ -46,7 +46,9 @@ export async function GET(_: NextRequest, { params }: LoanPhotoRouteProps) {
   return new NextResponse(new Uint8Array(photo.data), {
     headers: {
       "Content-Type": photo.contentType,
-      "Cache-Control": "private, max-age=300"
+      "Content-Length": String(photo.data.byteLength),
+      "Cache-Control": "private, max-age=300",
+      "X-Content-Type-Options": "nosniff"
     }
   });
 }

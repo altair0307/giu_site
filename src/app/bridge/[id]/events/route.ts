@@ -67,44 +67,56 @@ export async function GET(request: NextRequest, { params }: BridgeEventsRoutePro
     async start(controller) {
       let lastHeartbeatAt = Date.now();
 
-      controller.enqueue(encoder.encode("retry: 3000\n\n"));
-      controller.enqueue(encoder.encode(": connected\n\n"));
+      try {
+        controller.enqueue(encoder.encode("retry: 3000\n\n"));
+        controller.enqueue(encoder.encode(": connected\n\n"));
 
-      while (!request.signal.aborted) {
-        const events = await prisma.bridgeEvent.findMany({
-          where: {
-            roomId,
-            createdAt: {
-              gt: new Date(cursorMs)
-            }
-          },
-          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-          take: 20
-        });
+        while (!request.signal.aborted) {
+          const events = await prisma.bridgeEvent.findMany({
+            where: {
+              roomId,
+              createdAt: {
+                gt: new Date(cursorMs)
+              }
+            },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            take: 20
+          });
 
-        for (const event of events) {
-          cursorMs = Math.max(cursorMs, event.createdAt.getTime());
-          controller.enqueue(
-            encoder.encode(
-              `id: ${event.id}\nevent: bridge-event\ndata: ${JSON.stringify({
-                id: event.id,
-                type: event.type,
-                payload: spectator ? null : event.payload,
-                createdAt: event.createdAt.toISOString()
-              })}\n\n`
-            )
-          );
+          for (const event of events) {
+            cursorMs = Math.max(cursorMs, event.createdAt.getTime());
+            controller.enqueue(
+              encoder.encode(
+                `id: ${event.id}\nevent: bridge-event\ndata: ${JSON.stringify({
+                  id: event.id,
+                  type: event.type,
+                  payload: spectator ? null : event.payload,
+                  createdAt: event.createdAt.toISOString()
+                })}\n\n`
+              )
+            );
+          }
+
+          if (Date.now() - lastHeartbeatAt >= HEARTBEAT_INTERVAL_MS) {
+            lastHeartbeatAt = Date.now();
+            controller.enqueue(encoder.encode(": heartbeat\n\n"));
+          }
+
+          await wait(POLL_INTERVAL_MS, request.signal);
         }
-
-        if (Date.now() - lastHeartbeatAt >= HEARTBEAT_INTERVAL_MS) {
-          lastHeartbeatAt = Date.now();
-          controller.enqueue(encoder.encode(": heartbeat\n\n"));
+      } catch (error) {
+        if (!request.signal.aborted) {
+          console.error("Bridge event stream failed", error);
+          controller.error(error);
+          return;
         }
-
-        await wait(POLL_INTERVAL_MS, request.signal);
       }
 
-      controller.close();
+      try {
+        controller.close();
+      } catch {
+        // The client may already have closed the stream.
+      }
     }
   });
 

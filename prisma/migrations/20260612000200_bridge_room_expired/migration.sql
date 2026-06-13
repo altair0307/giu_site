@@ -1,0 +1,1 @@
+ALTER TYPE "BridgeRoomStatus" ADD VALUE 'EXPIRED';

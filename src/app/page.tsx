@@ -162,7 +162,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     prisma.meetup.findMany({
       where: {
         OR: [
-          { startsAt: { gte: new Date() } },
+          { kind: "GENERAL", startsAt: { gte: new Date() } },
           {
             kind: "BRIDGE",
             bridgeRoom: {
@@ -177,7 +177,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         host: { select: { name: true, loginId: true } },
         game: true,
         table: true,
-        bridgeRoom: { select: { id: true, status: true } },
+        bridgeRoom: {
+          select: {
+            id: true,
+            status: true,
+            allowSpectators: true,
+            deals: { select: { id: true }, take: 1 }
+          }
+        },
         participants: {
           include: {
             user: { select: { id: true, name: true, loginId: true } }
@@ -469,7 +476,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 const bridgeRoomStatus = meetup.bridgeRoom?.status ?? null;
                 const canManageMeetup = meetup.hostId === user.id || user.role === "ADMIN";
                 const meetupHref = meetup.bridgeRoom ? `/bridge/${meetup.bridgeRoom.id}` : `/meetups/${meetup.id}/manage`;
-                const cardHref = joined || canManageMeetup ? meetupHref : `/meetups/${meetup.id}/join`;
+                const canSpectate = Boolean(
+                  isBridgeMeetup &&
+                  !joined &&
+                  !canManageMeetup &&
+                  meetup.bridgeRoom?.allowSpectators &&
+                  meetup.bridgeRoom.deals.length > 0
+                );
+                const cardHref = joined || canManageMeetup || canSpectate ? meetupHref : `/meetups/${meetup.id}/join`;
 
                 return (
                   <article className="meetup-row" key={meetup.id}>
@@ -481,6 +495,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                         <div className="badge-row">
                           {isBridgeMeetup ? <span className="badge green">브릿지</span> : null}
                           {bridgeRoomStatus ? <span className="badge">{bridgeRoomStatus}</span> : null}
+                          {canSpectate ? <span className="badge green">관전 가능</span> : null}
                           <span className="badge">{meetup.participants.length}/{meetup.maxPeople}</span>
                         </div>
                       </div>

@@ -59,6 +59,7 @@ enum BridgeRoomStatus {
   PLAYING
   COMPLETED
   CANCELED
+  EXPIRED
 }
 
 enum BridgeSeatPosition {
@@ -80,6 +81,7 @@ enum BridgeEventType {
   ROUND_COMPLETED
   SEATS_RANDOMIZED
   SEATS_CHANGED
+  SPECTATOR_SETTING_CHANGED
 }
 
 enum BridgeContractSuit {
@@ -365,6 +367,7 @@ model BridgeRoom {
   meetupId  String           @unique
   hostId    String
   status    BridgeRoomStatus @default(LOBBY)
+  allowSpectators Boolean    @default(false)
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
   meetup    Meetup           @relation(fields: [meetupId], references: [id], onDelete: Cascade)

@@ -12,6 +12,7 @@ type BridgeRoundSummaryPopupProps = {
   undertricks: number;
   score: number;
   doubleStatus: "UNDOUBLED" | "DOUBLED" | "REDOUBLED";
+  vulnerability: string;
 };
 
 export function BridgeRoundSummaryPopup({
@@ -23,7 +24,8 @@ export function BridgeRoundSummaryPopup({
   overtricks,
   undertricks,
   score,
-  doubleStatus
+  doubleStatus,
+  vulnerability
 }: BridgeRoundSummaryPopupProps) {
   useEffect(() => {
     const storageKey = `bridge-round-summary:${dealId}`;
@@ -38,6 +40,7 @@ export function BridgeRoundSummaryPopup({
     window.alert(
       [
         `선언자 점수: ${score > 0 ? `+${score}` : score}`,
+        `취약 상태: ${vulnerability}`,
         doubleLabel ? `계약 상태: ${doubleLabel}` : null,
         `${declarerTeam} 획득 트릭: ${wonTricks}`,
         `필요했던 트릭: ${targetTricks}`,
@@ -46,7 +49,7 @@ export function BridgeRoundSummaryPopup({
         .filter(Boolean)
         .join("\n")
     );
-  }, [contractMade, dealId, declarerTeam, doubleStatus, overtricks, score, targetTricks, undertricks, wonTricks]);
+  }, [contractMade, dealId, declarerTeam, doubleStatus, overtricks, score, targetTricks, undertricks, vulnerability, wonTricks]);
 
   return null;
 }

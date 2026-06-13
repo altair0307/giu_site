@@ -4,6 +4,7 @@ import { ReturnDialog } from "@/app/borrow-dialog";
 import { RatingDialog } from "@/app/rating-dialog";
 import { StarRating } from "@/app/star-rating";
 import { requireUser } from "@/lib/auth";
+import { calculateBridgeSessionScore } from "@/lib/bridge-results";
 import { prisma } from "@/lib/db";
 import { createKoreaDateFormatter } from "@/lib/date-time";
 import { getRatingReasonLabel } from "@/lib/game-rating";
@@ -20,7 +21,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export default async function AccountPage() {
   const user = await requireUser();
   const now = new Date();
-  const [loans, ratings] = await Promise.all([
+  const [loans, ratings, bridgeResults] = await Promise.all([
     prisma.loan.findMany({
       where: {
         borrowerId: user.id,
@@ -72,6 +73,27 @@ export default async function AccountPage() {
       },
       orderBy: { updatedAt: "desc" },
       take: 40
+    }),
+    prisma.bridgeRoom.findMany({
+      where: {
+        status: { in: ["COMPLETED", "EXPIRED"] },
+        meetup: {
+          participants: { some: { userId: user.id } }
+        }
+      },
+      select: {
+        id: true,
+        status: true,
+        updatedAt: true,
+        meetup: { select: { title: true } },
+        deals: {
+          where: { completedAt: { not: null } },
+          select: { declarer: true, score: true },
+          orderBy: { boardNumber: "asc" }
+        }
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 30
     })
   ]);
 
@@ -128,6 +150,10 @@ export default async function AccountPage() {
         <div className="stat">
           <span>내 평점</span>
           <strong>{ratings.length}</strong>
+        </div>
+        <div className="stat">
+          <span>브릿지 기록</span>
+          <strong>{bridgeResults.length}</strong>
         </div>
       </section>
 
@@ -204,6 +230,38 @@ export default async function AccountPage() {
           </div>
         </section>
       ) : null}
+
+      <section className="section-block">
+        <div className="section-heading">
+          <h2>내 브릿지 기록</h2>
+          <span>{bridgeResults.length}개</span>
+        </div>
+        <div className="account-loan-list">
+          {bridgeResults.map((room) => {
+            const score = calculateBridgeSessionScore(room.deals);
+
+            return (
+              <article className="account-loan-row" key={room.id}>
+                <div>
+                  <div className="card-header compact">
+                    <h3>{room.meetup.title}</h3>
+                    <span className={room.status === "EXPIRED" ? "badge amber" : "badge green"}>
+                      {room.status === "EXPIRED" ? "만료" : "완료"}
+                    </span>
+                  </div>
+                  <p className="muted">
+                    {room.deals.length}보드 · NS {score.ns} · EW {score.ew} · {room.status === "EXPIRED" ? "만료" : "종료"} {dateFormatter.format(room.updatedAt)}
+                  </p>
+                </div>
+                <Link className="secondary-link" href={`/bridge/${room.id}`}>
+                  기록 보기
+                </Link>
+              </article>
+            );
+          })}
+          {bridgeResults.length === 0 ? <p className="empty account-empty">저장된 브릿지 세션 기록이 없습니다.</p> : null}
+        </div>
+      </section>
 
       <section className="section-block">
         <div className="section-heading">

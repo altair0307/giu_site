@@ -10,12 +10,14 @@ import {
   makeBridgeCallAction,
   playBridgeCardAction,
   randomizeBridgeSeatsAction,
-  removeMeetupParticipantAction
+  removeMeetupParticipantAction,
+  setBridgeSpectatorAccessAction
 } from "@/app/actions";
 import { BridgeActionForm } from "@/app/bridge/[id]/bridge-action-form";
 import { BridgeRoundSummaryPopup } from "@/app/bridge/[id]/bridge-round-summary-popup";
 import { BridgeRoomSync } from "@/app/bridge/[id]/bridge-room-sync";
 import { getCurrentUser } from "@/lib/auth";
+import { canViewBridgeRoom, isBridgeSpectator } from "@/lib/bridge-access";
 import { prisma } from "@/lib/db";
 
 const seatLabels = {
@@ -189,17 +191,22 @@ export default async function BridgeRoomPage({ params }: BridgeRoomPageProps) {
   }
 
   const isParticipant = room.meetup.participants.some((participant) => participant.userId === user.id);
+  const isAdmin = user.role === "ADMIN";
 
-  if (!isParticipant && user.role !== "ADMIN") {
+  if (!canViewBridgeRoom({ isParticipant, isAdmin, allowSpectators: room.allowSpectators })) {
     redirect("/");
   }
+
+  const isSpectator = isBridgeSpectator({ isParticipant, isAdmin });
 
   const seatsByPosition = new Map(room.seats.map((seat) => [seat.position, seat]));
   const mySeat = room.seats.find((seat) => seat.userId === user.id);
   const viewerPosition = (mySeat?.position ?? "SOUTH") as BridgeSeat;
   const hasFourSeats = room.seats.length === 4;
-  const canManageRoom = room.hostId === user.id || user.role === "ADMIN";
+  const canManageRoom = room.hostId === user.id || isAdmin;
   const sessionIsComplete = room.status === "COMPLETED";
+  const sessionIsExpired = room.status === "EXPIRED";
+  const sessionIsInactive = sessionIsComplete || sessionIsExpired;
   const activeDeal = room.deals.find((deal) => !deal.completedAt);
   const currentDeal = activeDeal ?? room.deals[0];
   const hasAnyDeal = room.deals.length > 0;
@@ -252,14 +259,14 @@ export default async function BridgeRoomPage({ params }: BridgeRoomPageProps) {
           ? mySeat.position
           : null
       : null;
-  const canPlayMyHand = !sessionIsComplete && playablePosition === mySeat?.position;
-  const canPlayDummyHand = !sessionIsComplete && playablePosition === currentDeal?.dummy && mySeat?.position === currentDeal?.declarer;
+  const canPlayMyHand = !sessionIsInactive && playablePosition === mySeat?.position;
+  const canPlayDummyHand = !sessionIsInactive && playablePosition === currentDeal?.dummy && mySeat?.position === currentDeal?.declarer;
   const vulnerableTextIsActive = Boolean(currentDeal && currentDeal.vulnerability !== "NONE");
 
   return (
     <main className="app-shell">
-      {!sessionIsComplete ? <BridgeRoomSync roomId={room.id} currentUserId={user.id} /> : null}
-      {!sessionIsComplete && roundIsComplete && currentDeal?.id && declarerTeam && targetTricks && typeof currentDeal.score === "number" ? (
+      {!sessionIsInactive ? <BridgeRoomSync roomId={room.id} currentUserId={user.id} /> : null}
+      {!sessionIsInactive && roundIsComplete && currentDeal?.id && declarerTeam && targetTricks && typeof currentDeal.score === "number" ? (
         <BridgeRoundSummaryPopup
           dealId={currentDeal.id}
           declarerTeam={declarerTeam}
@@ -270,6 +277,7 @@ export default async function BridgeRoomPage({ params }: BridgeRoomPageProps) {
           undertricks={currentDeal.undertricks ?? 0}
           score={currentDeal.score}
           doubleStatus={currentDeal.doubleStatus}
+          vulnerability={vulnerabilityLabels[currentDeal.vulnerability]}
         />
       ) : null}
       <header className="topbar">
@@ -290,12 +298,24 @@ export default async function BridgeRoomPage({ params }: BridgeRoomPageProps) {
       <section className="bridge-room-layout">
         <aside className="panel bridge-status-panel">
           <h2>진행 상태</h2>
+          {isSpectator ? (
+            <div className="bridge-result">
+              <strong>관전 중</strong>
+              <span>공개된 비딩, 더미, 현재 트릭과 결과만 표시됩니다.</span>
+            </div>
+          ) : null}
           {sessionIsComplete ? (
             <div className="bridge-result made">
               <strong>세션 종료</strong>
               <span>
                 최종 점수 NS {sessionScore.ns} · EW {sessionScore.ew}
               </span>
+            </div>
+          ) : null}
+          {sessionIsExpired ? (
+            <div className="bridge-result failed">
+              <strong>방 만료</strong>
+              <span>장시간 활동이 없어 관리자가 종료했습니다. 현재 상태는 읽기 전용입니다.</span>
             </div>
           ) : null}
           <p className="muted">
@@ -355,7 +375,7 @@ export default async function BridgeRoomPage({ params }: BridgeRoomPageProps) {
               ) : null}
             </div>
           ) : null}
-          {!sessionIsComplete && biddingIsActive && currentDeal?.biddingTurn ? (
+          {!sessionIsInactive && biddingIsActive && currentDeal?.biddingTurn ? (
             <div className="bridge-bidding-panel">
               <div>
                 <strong>비딩 차례</strong>
@@ -487,7 +507,14 @@ export default async function BridgeRoomPage({ params }: BridgeRoomPageProps) {
           ) : null}
           {canManageRoom ? (
             <div className="danger-actions">
-              {!sessionIsComplete ? (
+              {!sessionIsInactive ? (
+                <BridgeActionForm action={setBridgeSpectatorAccessAction}>
+                  <input type="hidden" name="roomId" value={room.id} />
+                  <input type="hidden" name="allowSpectators" value={room.allowSpectators ? "false" : "true"} />
+                  <button className="ghost-button">{room.allowSpectators ? "관전 차단" : "관전 허용"}</button>
+                </BridgeActionForm>
+              ) : null}
+              {!sessionIsInactive ? (
                 <form action={completeMeetupAction}>
                   <input type="hidden" name="meetupId" value={room.meetupId} />
                   <input type="hidden" name="returnTo" value={`/bridge/${room.id}`} />
@@ -497,7 +524,7 @@ export default async function BridgeRoomPage({ params }: BridgeRoomPageProps) {
               <BridgeActionForm action={cancelMeetupWithAlertAction}>
                 <input type="hidden" name="meetupId" value={room.meetupId} />
                 <input type="hidden" name="returnTo" value="/" />
-                <button className="ghost-button">{sessionIsComplete ? "결과 삭제" : "방 취소"}</button>
+                <button className="ghost-button">{sessionIsInactive ? "기록 삭제" : "방 취소"}</button>
               </BridgeActionForm>
             </div>
           ) : null}
@@ -506,7 +533,10 @@ export default async function BridgeRoomPage({ params }: BridgeRoomPageProps) {
         <article className="panel bridge-table-panel">
           <div className="section-heading">
             <h2>브릿지 테이블</h2>
-            <span className="badge green">{room.status}</span>
+            <div className="badge-row">
+              <span className="badge green">{room.status}</span>
+              {room.allowSpectators ? <span className="badge">관전 허용</span> : null}
+            </div>
           </div>
           <p className="muted">{room.meetup.table.name} · 좌석 4명</p>
           <div className="bridge-seat-grid">
@@ -524,7 +554,7 @@ export default async function BridgeRoomPage({ params }: BridgeRoomPageProps) {
                     {isDeclarer ? <span className="declarer-star" aria-label="선언자">★</span> : null}
                     {seat?.user.name ?? "빈 자리"}
                   </strong>
-                  {seat ? <small>{seat.user.loginId}</small> : null}
+                  {seat && !isSpectator ? <small>{seat.user.loginId}</small> : null}
                   {play ? <small className="bridge-played-marker">카드 냄</small> : null}
                 </div>
               );
@@ -603,10 +633,18 @@ export default async function BridgeRoomPage({ params }: BridgeRoomPageProps) {
                 deal.contractLevel && deal.contractSuit && deal.declarer
                   ? `${deal.contractLevel}${contractSuitLabels[deal.contractSuit]}${doubleStatusLabels[deal.doubleStatus] ? ` ${doubleStatusLabels[deal.doubleStatus]}` : ""} · ${seatLabels[deal.declarer]}`
                   : "패스 아웃";
+              const resultText =
+                deal.contractMade === true
+                  ? `성공${deal.overtricks ? ` +${deal.overtricks}` : ""}`
+                  : deal.contractMade === false
+                    ? `${deal.undertricks ?? 0}다운`
+                    : "0점";
 
               return (
                 <div className="bridge-call-item" key={deal.id}>
-                  <span>보드 {deal.boardNumber} · {contractText}</span>
+                  <span>
+                    보드 {deal.boardNumber} · {vulnerabilityLabels[deal.vulnerability]} · {contractText} · {resultText}
+                  </span>
                   <strong>
                     NS {nsScore} · EW {ewScore}
                   </strong>
@@ -617,7 +655,7 @@ export default async function BridgeRoomPage({ params }: BridgeRoomPageProps) {
         </section>
       ) : null}
 
-      {!sessionIsComplete ? (
+      {currentDeal ? (
       <section className="section-block">
         <div className="section-heading">
           <h2>현재 트릭</h2>
@@ -652,7 +690,7 @@ export default async function BridgeRoomPage({ params }: BridgeRoomPageProps) {
       </section>
       ) : null}
 
-      {!sessionIsComplete && dummyHand.length > 0 && currentDeal?.dummy ? (
+      {dummyHand.length > 0 && currentDeal?.dummy ? (
         <section className="section-block">
           <div className="section-heading">
             <h2>더미 손패</h2>
@@ -685,7 +723,7 @@ export default async function BridgeRoomPage({ params }: BridgeRoomPageProps) {
             })}
           </div>
         </section>
-      ) : !sessionIsComplete && contractIsSet && currentDeal?.dummy ? (
+      ) : contractIsSet && currentDeal?.dummy ? (
         <section className="section-block">
           <div className="section-heading">
             <h2>더미 손패</h2>
@@ -695,7 +733,7 @@ export default async function BridgeRoomPage({ params }: BridgeRoomPageProps) {
         </section>
       ) : null}
 
-      {!sessionIsComplete ? (
+      {mySeat && currentDeal ? (
       <section className="section-block">
         <div className="section-heading">
           <h2>내 손패</h2>

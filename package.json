@@ -7,6 +7,8 @@
     "build": "prisma generate && next build && node scripts/prepare-standalone-static.mjs",
     "start": "node .next/standalone/server.js",
     "lint": "eslint .",
+    "test:bridge": "tsx --test src/lib/bridge-scoring.test.ts src/lib/bridge-results.test.ts src/lib/bridge-expiration.test.ts src/lib/bridge-access.test.ts",
+    "test:bridge:integration": "DATABASE_URL=postgresql://boardgame:boardgame@localhost:55433/boardgame_test?schema=public tsx --test src/lib/bridge-auction.integration.test.ts src/lib/bridge-play.integration.test.ts src/lib/bridge-session.integration.test.ts",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",

@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
+import { canViewBridgeRoom, isBridgeSpectator } from "@/lib/bridge-access";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -50,10 +51,13 @@ export async function GET(request: NextRequest, { params }: BridgeEventsRoutePro
   }
 
   const isParticipant = room.meetup.participants.some((participant) => participant.userId === user.id);
+  const isAdmin = user.role === "ADMIN";
 
-  if (!isParticipant && user.role !== "ADMIN") {
+  if (!canViewBridgeRoom({ isParticipant, isAdmin, allowSpectators: room.allowSpectators })) {
     return new Response("Forbidden", { status: 403 });
   }
+
+  const spectator = isBridgeSpectator({ isParticipant, isAdmin });
 
   const encoder = new TextEncoder();
   const sinceParam = Number(request.nextUrl.searchParams.get("since"));
@@ -85,7 +89,7 @@ export async function GET(request: NextRequest, { params }: BridgeEventsRoutePro
               `id: ${event.id}\nevent: bridge-event\ndata: ${JSON.stringify({
                 id: event.id,
                 type: event.type,
-                payload: event.payload,
+                payload: spectator ? null : event.payload,
                 createdAt: event.createdAt.toISOString()
               })}\n\n`
             )

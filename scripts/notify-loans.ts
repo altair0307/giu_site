@@ -56,6 +56,10 @@ async function main() {
   console.log(
     `Loan notification job finished. overdue=${overdueLoans.length}, sent=${sentCount}, skipped=${skippedCount}, failed=${failedCount}`
   );
+
+  if (failedCount > 0) {
+    throw new Error(`Failed to send ${failedCount} overdue loan notification(s).`);
+  }
 }
 
 main()

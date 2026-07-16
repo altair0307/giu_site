@@ -10,7 +10,7 @@ export default function AdminImportGamesPage() {
           <input name="file" type="file" accept=".xlsx" required />
         </label>
         <p className="form-note wide">
-          소유자 열은 제외하고, 빈칸은 빈칸으로 저장합니다. 대여 중인 게임과 대여 기록은 유지됩니다.
+          소유자 열을 포함해 빈칸은 빈칸으로 저장합니다. 대여 중인 게임과 대여 기록은 유지됩니다.
         </p>
         <a className="secondary-link wide" href="/admin/games/export">
           현재 DB 내려받기

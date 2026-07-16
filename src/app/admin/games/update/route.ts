@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
         playTime: z.string().trim().max(80, "시간은 80자 이하여야 합니다.").optional(),
         quantity: z.coerce.number().int().min(0).max(999).optional().nullable(),
         note: z.string().trim().max(1000, "비고는 1000자 이하여야 합니다.").optional(),
+        owner: z.string().trim().max(120, "소유자는 120자 이하여야 합니다.").optional(),
         genre: z.string().trim().max(120, "장르는 120자 이하여야 합니다.").optional(),
         isPresent: z.enum(["", "true", "false"]).optional(),
         isLoanEnabled: z.enum(["true", "false"]),
@@ -83,6 +84,7 @@ export async function POST(request: NextRequest) {
         playTime: value(formData, "playTime") || undefined,
         quantity: value(formData, "quantity") === "" ? null : formData.get("quantity"),
         note: value(formData, "note") || undefined,
+        owner: value(formData, "owner") || undefined,
         genre: value(formData, "genre") || undefined,
         isPresent: value(formData, "isPresent") as "" | "true" | "false",
         isLoanEnabled: value(formData, "isLoanEnabled"),
@@ -106,6 +108,7 @@ export async function POST(request: NextRequest) {
           playTime: parsed.playTime ?? null,
           quantity: parsed.quantity ?? null,
           note: parsed.note ?? null,
+          owner: parsed.owner ?? null,
           genre: parsed.genre ?? null,
           isPresent: parsed.isPresent === "" || parsed.isPresent === undefined ? null : parsed.isPresent === "true",
           isLoanEnabled: parsed.isLoanEnabled === "true",
@@ -124,6 +127,8 @@ export async function POST(request: NextRequest) {
           previousTitle: previousGame.title,
           isLoanEnabledBefore: previousGame.isLoanEnabled,
           isLoanEnabledAfter: game.isLoanEnabled,
+          ownerBefore: previousGame.owner,
+          ownerAfter: game.owner,
           genre: game.genre
         }
       });

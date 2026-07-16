@@ -4,6 +4,7 @@ type AdminGamesPageProps = {
   searchParams: Promise<{
     q?: string;
     category?: string;
+    owner?: string;
     gameNotice?: string;
     gameError?: string;
   }>;
@@ -13,17 +14,20 @@ export default async function AdminGamesPage({ searchParams }: AdminGamesPagePro
   const params = await searchParams;
   const q = (params.q ?? "").trim();
   const category = (params.category ?? "").trim();
+  const owner = (params.owner ?? "").trim();
   const returnParams = new URLSearchParams();
 
   if (q) returnParams.set("q", q);
   if (category) returnParams.set("category", category);
+  if (owner) returnParams.set("owner", owner);
 
   const gameEditReturnTo = `/admin/games${returnParams.size ? `?${returnParams.toString()}` : ""}#game-edit`;
 
   const games = await prisma.game.findMany({
     where: {
       ...(q ? { title: { contains: q, mode: "insensitive" as const } } : {}),
-      ...(category ? { genre: { contains: category, mode: "insensitive" as const } } : {})
+      ...(category ? { genre: { contains: category, mode: "insensitive" as const } } : {}),
+      ...(owner ? { owner: { contains: owner, mode: "insensitive" as const } } : {})
     },
     orderBy: { title: "asc" },
     take: 20
@@ -40,6 +44,7 @@ export default async function AdminGamesPage({ searchParams }: AdminGamesPagePro
       <form className="filter-bar admin-search-bar">
         <input name="q" defaultValue={q} placeholder="게임명 검색" />
         <input name="category" defaultValue={category} placeholder="카테고리(장르) 검색" />
+        <input name="owner" defaultValue={owner} placeholder="소유자 검색" />
         <button className="secondary-button">검색</button>
       </form>
 
@@ -71,6 +76,10 @@ export default async function AdminGamesPage({ searchParams }: AdminGamesPagePro
             <label>
               장르
               <input name="genre" defaultValue={game.genre ?? ""} />
+            </label>
+            <label>
+              소유자
+              <input name="owner" defaultValue={game.owner ?? ""} />
             </label>
             <label>
               존재

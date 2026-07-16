@@ -7,7 +7,7 @@ export const GAME_HEADERS = [
   "시간(분)",
   "수량(개)",
   "비고",
-  "소유자(사용 안 함)",
+  "소유자",
   "장르",
   "존재 여부",
   "난이도(웨이트)",
@@ -21,6 +21,7 @@ export type GameImportRow = {
   playTime: string | null;
   quantity: number | null;
   note: string | null;
+  owner: string | null;
   genre: string | null;
   isPresent: boolean | null;
   weight: string | null;
@@ -120,6 +121,7 @@ export async function parseGameWorkbook(buffer: Uint8Array) {
       playTime: nullableText(row.getCell(4).value),
       quantity: nullableNumber(row.getCell(5).value),
       note: nullableText(row.getCell(6).value),
+      owner: nullableText(row.getCell(7).value),
       genre: nullableText(row.getCell(8).value),
       isPresent: presentValue(row.getCell(9).value),
       weight: nullableWeight(row.getCell(10).value),
@@ -143,7 +145,7 @@ export async function buildGameWorkbook(rows: ExportRow[]) {
       game.playTime ?? "",
       game.quantity ?? "",
       game.note ?? "",
-      "",
+      game.owner ?? "",
       game.genre ?? "",
       game.isPresent === null || game.isPresent === undefined ? "" : game.isPresent ? "ㅇ" : "x",
       game.weight ?? "",

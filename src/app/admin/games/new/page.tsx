@@ -30,6 +30,10 @@ export default function AdminNewGamePage() {
           <input name="genre" />
         </label>
         <label>
+          소유자
+          <input name="owner" />
+        </label>
+        <label>
           존재 여부
           <select name="isPresent" defaultValue="">
             <option value="">빈칸</option>

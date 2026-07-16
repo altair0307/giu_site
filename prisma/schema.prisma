@@ -176,6 +176,7 @@ model Game {
   playTime      String?
   quantity      Int?
   note          String?
+  owner         String?
   genre         String?
   isPresent     Boolean?
   weight        String?
@@ -191,6 +192,7 @@ model Game {
   @@index([status])
   @@index([isLoanEnabled])
   @@index([title])
+  @@index([owner])
 }
 
 model GameRating {

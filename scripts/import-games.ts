@@ -25,6 +25,7 @@ async function main() {
         playTime: row.playTime,
         quantity: row.quantity,
         note: row.note,
+        owner: row.owner,
         genre: row.genre,
         isPresent: row.isPresent,
         weight: row.weight,

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 type AdminGamesPageProps = {
   searchParams: Promise<{
     q?: string;
+    category?: string;
     gameNotice?: string;
     gameError?: string;
   }>;
@@ -11,10 +12,19 @@ type AdminGamesPageProps = {
 export default async function AdminGamesPage({ searchParams }: AdminGamesPageProps) {
   const params = await searchParams;
   const q = (params.q ?? "").trim();
-  const gameEditReturnTo = `/admin/games${q ? `?${new URLSearchParams({ q }).toString()}` : ""}#game-edit`;
+  const category = (params.category ?? "").trim();
+  const returnParams = new URLSearchParams();
+
+  if (q) returnParams.set("q", q);
+  if (category) returnParams.set("category", category);
+
+  const gameEditReturnTo = `/admin/games${returnParams.size ? `?${returnParams.toString()}` : ""}#game-edit`;
 
   const games = await prisma.game.findMany({
-    where: q ? { title: { contains: q, mode: "insensitive" } } : {},
+    where: {
+      ...(q ? { title: { contains: q, mode: "insensitive" as const } } : {}),
+      ...(category ? { genre: { contains: category, mode: "insensitive" as const } } : {})
+    },
     orderBy: { title: "asc" },
     take: 20
   });
@@ -28,7 +38,8 @@ export default async function AdminGamesPage({ searchParams }: AdminGamesPagePro
       {params.gameNotice ? <p className="notice success-notice">{params.gameNotice}</p> : null}
       {params.gameError ? <p className="notice error-notice">{params.gameError}</p> : null}
       <form className="filter-bar admin-search-bar">
-        <input name="q" defaultValue={q} placeholder="수정할 게임 검색" />
+        <input name="q" defaultValue={q} placeholder="게임명 검색" />
+        <input name="category" defaultValue={category} placeholder="카테고리(장르) 검색" />
         <button className="secondary-button">검색</button>
       </form>
 
@@ -72,6 +83,13 @@ export default async function AdminGamesPage({ searchParams }: AdminGamesPagePro
             <label>
               웨이트
               <input name="weight" defaultValue={game.weight ?? ""} />
+            </label>
+            <label>
+              대여
+              <select name="isLoanEnabled" defaultValue={game.isLoanEnabled ? "true" : "false"}>
+                <option value="true">활성화</option>
+                <option value="false">비활성화</option>
+              </select>
             </label>
             <label className="admin-game-info-url">
               정보 사이트

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
+import { createGeneralActivityLog } from "@/lib/activity-log";
 import { prisma } from "@/lib/db";
 import { safeAdminPath } from "@/lib/navigation";
 import { assertRateLimit } from "@/lib/rate-limit";
@@ -69,6 +71,7 @@ export async function POST(request: NextRequest) {
         note: z.string().trim().max(1000, "비고는 1000자 이하여야 합니다.").optional(),
         genre: z.string().trim().max(120, "장르는 120자 이하여야 합니다.").optional(),
         isPresent: z.enum(["", "true", "false"]).optional(),
+        isLoanEnabled: z.enum(["true", "false"]),
         weight: z.string().trim().max(80, "웨이트는 80자 이하여야 합니다.").optional(),
         infoUrl: z.string().trim().max(500, "정보 사이트 주소는 500자 이하여야 합니다.").optional()
       })
@@ -82,25 +85,54 @@ export async function POST(request: NextRequest) {
         note: value(formData, "note") || undefined,
         genre: value(formData, "genre") || undefined,
         isPresent: value(formData, "isPresent") as "" | "true" | "false",
+        isLoanEnabled: value(formData, "isLoanEnabled"),
         weight: value(formData, "weight") || undefined,
         infoUrl: value(formData, "infoUrl") || undefined
       });
 
-    await prisma.game.update({
-      where: { id: parsed.id },
-      data: {
-        title: parsed.title,
-        players: parsed.players ?? null,
-        bestPlayers: parsed.bestPlayers ?? null,
-        playTime: parsed.playTime ?? null,
-        quantity: parsed.quantity ?? null,
-        note: parsed.note ?? null,
-        genre: parsed.genre ?? null,
-        isPresent: parsed.isPresent === "" || parsed.isPresent === undefined ? null : parsed.isPresent === "true",
-        weight: parsed.weight ?? null,
-        infoUrl: parsed.infoUrl ?? null
+    await prisma.$transaction(async (tx) => {
+      const previousGame = await tx.game.findUnique({ where: { id: parsed.id } });
+
+      if (!previousGame) {
+        throw new Error("수정할 게임을 찾을 수 없습니다.");
       }
+
+      const game = await tx.game.update({
+        where: { id: parsed.id },
+        data: {
+          title: parsed.title,
+          players: parsed.players ?? null,
+          bestPlayers: parsed.bestPlayers ?? null,
+          playTime: parsed.playTime ?? null,
+          quantity: parsed.quantity ?? null,
+          note: parsed.note ?? null,
+          genre: parsed.genre ?? null,
+          isPresent: parsed.isPresent === "" || parsed.isPresent === undefined ? null : parsed.isPresent === "true",
+          isLoanEnabled: parsed.isLoanEnabled === "true",
+          weight: parsed.weight ?? null,
+          infoUrl: parsed.infoUrl ?? null
+        }
+      });
+
+      await createGeneralActivityLog(tx, {
+        category: "GAME",
+        action: "UPDATE",
+        actor: user,
+        target: { type: "GAME", id: game.id, name: game.title },
+        message: `${user.name} 관리자가 ${game.title} 보드게임 정보를 수정했습니다.`,
+        metadata: {
+          previousTitle: previousGame.title,
+          isLoanEnabledBefore: previousGame.isLoanEnabled,
+          isLoanEnabledAfter: game.isLoanEnabled,
+          genre: game.genre
+        }
+      });
     });
+
+    revalidatePath("/");
+    revalidatePath("/admin");
+    revalidatePath("/admin/games");
+    revalidatePath("/admin/logs");
 
     return redirectWithStatus(returnTo, {
       gameNotice: "게임 정보를 수정했습니다."

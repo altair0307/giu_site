@@ -579,7 +579,7 @@ export async function borrowGameAction(formData: FormData) {
   const borrowedLoan = await prisma.$transaction(async (tx) => {
     const game = await tx.game.findUnique({ where: { id: gameId } });
 
-    if (!game || game.status !== "AVAILABLE") {
+    if (!game || !game.isLoanEnabled || game.status !== "AVAILABLE") {
       throw new Error("대여 요청 가능한 게임이 아닙니다.");
     }
 
@@ -772,7 +772,7 @@ export async function approveLoanRequestAction(formData: FormData) {
     if (request.type === "BORROW") {
       const game = await tx.game.findUnique({ where: { id: request.gameId } });
 
-      if (!game || game.status !== "AVAILABLE") {
+      if (!game || !game.isLoanEnabled || game.status !== "AVAILABLE") {
         throw new Error("현재 대여 가능한 게임이 아닙니다.");
       }
 

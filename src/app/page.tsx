@@ -73,6 +73,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   };
 
   const gameWhere: Prisma.GameWhereInput = {
+    isLoanEnabled: true,
     ...(q ? { title: { contains: q, mode: "insensitive" as const } } : {}),
     ...(status !== "ALL" ? { status } : {})
   };
@@ -152,6 +153,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     }),
     prisma.game.count({
       where: {
+        isLoanEnabled: true,
         status: "AVAILABLE",
         meetups: {
           none: {

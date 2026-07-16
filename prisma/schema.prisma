@@ -169,25 +169,27 @@ model Session {
 }
 
 model Game {
-  id           String        @id @default(cuid())
-  title        String
-  players      String?
-  bestPlayers  String?
-  playTime     String?
-  quantity     Int?
-  note         String?
-  genre        String?
-  isPresent    Boolean?
-  weight       String?
-  infoUrl      String?
-  status       GameStatus    @default(AVAILABLE)
-  createdAt    DateTime      @default(now())
-  loans        Loan[]
-  loanRequests LoanRequest[]
-  ratings      GameRating[]
-  meetups      Meetup[]
+  id            String        @id @default(cuid())
+  title         String
+  players       String?
+  bestPlayers   String?
+  playTime      String?
+  quantity      Int?
+  note          String?
+  genre         String?
+  isPresent     Boolean?
+  weight        String?
+  infoUrl       String?
+  isLoanEnabled Boolean       @default(true)
+  status        GameStatus    @default(AVAILABLE)
+  createdAt     DateTime      @default(now())
+  loans         Loan[]
+  loanRequests  LoanRequest[]
+  ratings       GameRating[]
+  meetups       Meetup[]
 
   @@index([status])
+  @@index([isLoanEnabled])
   @@index([title])
 }
 

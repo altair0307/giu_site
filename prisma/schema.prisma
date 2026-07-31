@@ -178,6 +178,7 @@ model Game {
   note          String?
   owner         String?
   genre         String?
+  detailGenre   String?
   isPresent     Boolean?
   weight        String?
   infoUrl       String?

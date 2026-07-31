@@ -27,6 +27,7 @@ async function main() {
         note: row.note,
         owner: row.owner,
         genre: row.genre,
+        detailGenre: row.detailGenre,
         isPresent: row.isPresent,
         weight: row.weight,
         infoUrl: row.infoUrl

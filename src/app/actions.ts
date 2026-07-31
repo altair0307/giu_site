@@ -519,6 +519,7 @@ export async function addGameAction(_: ActionState, formData: FormData): Promise
         note: z.string().trim().max(300).optional(),
         owner: z.string().trim().max(120).optional(),
         genre: z.string().trim().max(80).optional(),
+        detailGenre: z.string().trim().max(80).optional(),
         isPresent: z.enum(["", "true", "false"]).optional(),
         weight: z.string().trim().max(40).optional(),
         infoUrl: z.string().trim().max(500).optional()
@@ -532,6 +533,7 @@ export async function addGameAction(_: ActionState, formData: FormData): Promise
         note: value(formData, "note") || undefined,
         owner: value(formData, "owner") || undefined,
         genre: value(formData, "genre") || undefined,
+        detailGenre: value(formData, "detailGenre") || undefined,
         isPresent: value(formData, "isPresent") as "" | "true" | "false",
         weight: value(formData, "weight") || undefined,
         infoUrl: value(formData, "infoUrl") || undefined
@@ -556,6 +558,7 @@ export async function addGameAction(_: ActionState, formData: FormData): Promise
         quantity: game.quantity,
         owner: game.owner,
         genre: game.genre,
+        detailGenre: game.detailGenre,
         isPresent: game.isPresent,
         weight: game.weight
       }
@@ -1096,6 +1099,7 @@ export async function updateGameAction(_: ActionState, formData: FormData): Prom
         note: z.string().trim().max(300).optional(),
         owner: z.string().trim().max(120).optional(),
         genre: z.string().trim().max(80).optional(),
+        detailGenre: z.string().trim().max(80).optional(),
         isPresent: z.enum(["", "true", "false"]).optional(),
         weight: z.string().trim().max(40).optional(),
         infoUrl: z.string().trim().max(500).optional()
@@ -1110,6 +1114,7 @@ export async function updateGameAction(_: ActionState, formData: FormData): Prom
         note: value(formData, "note") || undefined,
         owner: value(formData, "owner") || undefined,
         genre: value(formData, "genre") || undefined,
+        detailGenre: value(formData, "detailGenre") || undefined,
         isPresent: value(formData, "isPresent") as "" | "true" | "false",
         weight: value(formData, "weight") || undefined,
         infoUrl: value(formData, "infoUrl") || undefined
@@ -1126,6 +1131,7 @@ export async function updateGameAction(_: ActionState, formData: FormData): Prom
         note: parsed.note ?? null,
         owner: parsed.owner ?? null,
         genre: parsed.genre ?? null,
+        detailGenre: parsed.detailGenre ?? null,
         isPresent: parsed.isPresent === "" || parsed.isPresent === undefined ? null : parsed.isPresent === "true",
         weight: parsed.weight ?? null,
         infoUrl: parsed.infoUrl ?? null
@@ -1141,6 +1147,7 @@ export async function updateGameAction(_: ActionState, formData: FormData): Prom
         quantity: game.quantity,
         owner: game.owner,
         genre: game.genre,
+        detailGenre: game.detailGenre,
         isPresent: game.isPresent,
         weight: game.weight
       }
@@ -1370,9 +1377,10 @@ export async function importGamesAction(_: ActionState, formData: FormData): Pro
           note: row.note,
           owner: row.owner,
           genre: row.genre,
+          detailGenre: row.detailGenre,
           isPresent: row.isPresent,
           weight: row.weight,
-          infoUrl: row.infoUrl
+          ...(row.infoUrl !== undefined ? { infoUrl: row.infoUrl } : {})
         };
 
         if (existingGame) {

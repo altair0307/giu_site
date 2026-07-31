@@ -30,6 +30,10 @@ export default function AdminNewGamePage() {
           <input name="genre" />
         </label>
         <label>
+          세부 장르
+          <input name="detailGenre" />
+        </label>
+        <label>
           소유자
           <input name="owner" />
         </label>

@@ -9,9 +9,9 @@ export const GAME_HEADERS = [
   "비고",
   "소유자",
   "장르",
+  "세부 장르",
   "존재 여부",
-  "난이도(웨이트)",
-  "보드게임 정보 사이트"
+  "난이도(웨이트)"
 ] as const;
 
 export type GameImportRow = {
@@ -23,9 +23,10 @@ export type GameImportRow = {
   note: string | null;
   owner: string | null;
   genre: string | null;
+  detailGenre: string | null;
   isPresent: boolean | null;
   weight: string | null;
-  infoUrl: string | null;
+  infoUrl?: string | null;
 };
 
 type ExportRow = GameImportRow & {
@@ -103,29 +104,44 @@ export async function parseGameWorkbook(buffer: Uint8Array) {
   }
 
   const rows: GameImportRow[] = [];
+  const headerRow = worksheet.getRow(1);
+  const headerColumns = new Map<string, number>();
+
+  headerRow.eachCell((cell, columnNumber) => {
+    const header = cellText(cell.value).replace(/\s+/g, " ");
+    if (header) {
+      headerColumns.set(header, columnNumber);
+    }
+  });
+
+  const column = (header: string, legacyColumn: number) => headerColumns.get(header) ?? legacyColumn;
+  const hasDetailGenre = headerColumns.has("세부 장르");
 
   worksheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) {
       return;
     }
 
-    const title = cellText(row.getCell(1).value);
+    const title = cellText(row.getCell(column("제목", 1)).value);
     if (!title) {
       return;
     }
 
     rows.push({
       title,
-      players: nullableText(row.getCell(2).value),
-      bestPlayers: nullableText(row.getCell(3).value),
-      playTime: nullableText(row.getCell(4).value),
-      quantity: nullableNumber(row.getCell(5).value),
-      note: nullableText(row.getCell(6).value),
-      owner: nullableText(row.getCell(7).value),
-      genre: nullableText(row.getCell(8).value),
-      isPresent: presentValue(row.getCell(9).value),
-      weight: nullableWeight(row.getCell(10).value),
-      infoUrl: nullableText(row.getCell(11).value)
+      players: nullableText(row.getCell(column("인원(명)", 2)).value),
+      bestPlayers: nullableText(row.getCell(column("베스트 인원", 3)).value),
+      playTime: nullableText(row.getCell(column("시간(분)", 4)).value),
+      quantity: nullableNumber(row.getCell(column("수량(개)", 5)).value),
+      note: nullableText(row.getCell(column("비고", 6)).value),
+      owner: nullableText(row.getCell(column("소유자", 7)).value),
+      genre: nullableText(row.getCell(column("장르", 8)).value),
+      detailGenre: hasDetailGenre ? nullableText(row.getCell(column("세부 장르", 9)).value) : null,
+      isPresent: presentValue(row.getCell(column("존재 여부", hasDetailGenre ? 10 : 9)).value),
+      weight: nullableWeight(row.getCell(column("난이도(웨이트)", hasDetailGenre ? 11 : 10)).value),
+      infoUrl: headerColumns.has("보드게임 정보 사이트")
+        ? nullableText(row.getCell(column("보드게임 정보 사이트", 11)).value)
+        : undefined
     });
   });
 
@@ -147,9 +163,9 @@ export async function buildGameWorkbook(rows: ExportRow[]) {
       game.note ?? "",
       game.owner ?? "",
       game.genre ?? "",
+      game.detailGenre ?? "",
       game.isPresent === null || game.isPresent === undefined ? "" : game.isPresent ? "ㅇ" : "x",
-      game.weight ?? "",
-      game.infoUrl ?? ""
+      game.weight ?? ""
     ]);
   }
 
@@ -162,9 +178,9 @@ export async function buildGameWorkbook(rows: ExportRow[]) {
     { width: 24 },
     { width: 16 },
     { width: 18 },
+    { width: 18 },
     { width: 12 },
-    { width: 16 },
-    { width: 36 }
+    { width: 16 }
   ];
 
   worksheet.getRow(1).font = { bold: true };

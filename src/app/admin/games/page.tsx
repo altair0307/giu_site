@@ -78,6 +78,10 @@ export default async function AdminGamesPage({ searchParams }: AdminGamesPagePro
               <input name="genre" defaultValue={game.genre ?? ""} />
             </label>
             <label>
+              세부 장르
+              <input name="detailGenre" defaultValue={game.detailGenre ?? ""} />
+            </label>
+            <label>
               소유자
               <input name="owner" defaultValue={game.owner ?? ""} />
             </label>

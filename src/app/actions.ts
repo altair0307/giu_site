@@ -22,6 +22,7 @@ import { parseKoreaDateTimeLocal } from "@/lib/date-time";
 import { NEGATIVE_RATING_REASON_VALUES, POSITIVE_RATING_REASON_VALUES, RATING_REASON_VALUES } from "@/lib/game-rating";
 import { parseGameWorkbook } from "@/lib/game-spreadsheet";
 import { safeInternalPath } from "@/lib/navigation";
+import { assertUserCanBorrow, loanDueAt } from "@/lib/loan-policy";
 import { notifyLoanBorrowed, notifyReturnRequested } from "@/lib/notifications";
 import { assertRateLimit } from "@/lib/rate-limit";
 import { getClientKey } from "@/lib/request";
@@ -601,6 +602,8 @@ export async function borrowGameAction(formData: FormData) {
       throw new Error("이미 대여 승인 대기 중인 게임입니다.");
     }
 
+    const loanPolicy = await assertUserCanBorrow(tx, user.id);
+
     const request = await tx.loanRequest.create({
       data: {
         type: "BORROW",
@@ -616,7 +619,7 @@ export async function borrowGameAction(formData: FormData) {
         gameId,
         borrowerId: user.id,
         borrowedAt: now,
-        dueAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+        dueAt: loanDueAt(now, loanPolicy.loanPeriodDays)
       }
     });
 
@@ -782,12 +785,14 @@ export async function approveLoanRequestAction(formData: FormData) {
         throw new Error("현재 대여 가능한 게임이 아닙니다.");
       }
 
+      const loanPolicy = await assertUserCanBorrow(tx, request.requesterId);
+
       const loan = await tx.loan.create({
         data: {
           gameId: request.gameId,
           borrowerId: request.requesterId,
           borrowedAt: now,
-          dueAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+          dueAt: loanDueAt(now, loanPolicy.loanPeriodDays)
         }
       });
 
@@ -954,6 +959,63 @@ export async function deleteLoanAction(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/admin/loans");
   redirect("/admin/loans?notice=loan-deleted");
+}
+
+export async function updateLoanPolicyAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    const user = await requireUser();
+    assertRateLimit(`update-loan-policy:${user.id}`, 12, 60_000);
+
+    if (user.role !== "ADMIN") {
+      throw new Error("관리자만 대여 제한을 변경할 수 있습니다.");
+    }
+
+    const parsed = z
+      .object({
+        maxActiveLoansPerUser: z.coerce.number().int().min(1, "동시 대여 개수는 1개 이상이어야 합니다.").max(100, "동시 대여 개수는 100개 이하여야 합니다."),
+        maxLoansPerMonth: z.coerce.number().int().min(1, "월 대여 횟수는 1회 이상이어야 합니다.").max(1000, "월 대여 횟수는 1000회 이하여야 합니다."),
+        loanPeriodDays: z.coerce.number().int().min(1, "대여 기간은 1일 이상이어야 합니다.").max(365, "대여 기간은 365일 이하여야 합니다.")
+      })
+      .parse({
+        maxActiveLoansPerUser: value(formData, "maxActiveLoansPerUser"),
+        maxLoansPerMonth: value(formData, "maxLoansPerMonth"),
+        loanPeriodDays: value(formData, "loanPeriodDays")
+      });
+
+    const previous = await prisma.loanPolicy.findUnique({ where: { id: "default" } });
+    await prisma.$transaction(async (tx) => {
+      await tx.loanPolicy.upsert({
+        where: { id: "default" },
+        create: { id: "default", ...parsed },
+        update: parsed
+      });
+      await createGeneralActivityLog(tx, {
+        category: "LOAN_POLICY",
+        action: "UPDATE",
+        actor: user,
+        target: { type: "LOAN_POLICY", id: "default", name: "대여 제한" },
+        message: `${user.name} 관리자가 대여 제한을 변경했습니다.`,
+        metadata: {
+          previous: previous
+            ? {
+                maxActiveLoansPerUser: previous.maxActiveLoansPerUser,
+                maxLoansPerMonth: previous.maxLoansPerMonth,
+                loanPeriodDays: previous.loanPeriodDays,
+                updatedAt: previous.updatedAt.toISOString()
+              }
+            : null,
+          current: parsed
+        }
+      });
+    });
+
+    revalidatePath("/");
+    revalidatePath("/admin/settings");
+    revalidatePath("/admin/logs");
+    return { ok: true, message: "대여 제한을 저장했습니다." };
+  } catch (error) {
+    return { message: actionError(error, "대여 제한을 저장하지 못했습니다.") };
+  }
 }
 
 export async function pruneActivityLogsAction(formData: FormData) {

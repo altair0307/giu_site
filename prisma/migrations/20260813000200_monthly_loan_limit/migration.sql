@@ -1,0 +1,2 @@
+ALTER TABLE "LoanPolicy"
+ADD COLUMN "maxLoansPerMonth" INTEGER NOT NULL DEFAULT 5;

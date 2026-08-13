@@ -7,6 +7,7 @@ const adminLinks = [
   { href: "/admin", label: "승인 대기" },
   { href: "/admin/logs", label: "운영 로그" },
   { href: "/admin/loans", label: "대여 관리" },
+  { href: "/admin/settings", label: "대여 설정" },
   { href: "/admin/users", label: "회원 관리" },
   { href: "/admin/announcements", label: "공지 관리" },
   { href: "/admin/meetups", label: "약속 관리" },

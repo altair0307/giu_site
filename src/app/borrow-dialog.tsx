@@ -12,6 +12,7 @@ const ALLOWED_PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 type BorrowDialogProps = {
   gameId: string;
   gameTitle: string;
+  loanPeriodDays: number;
 };
 
 type ReturnDialogProps = {
@@ -264,7 +265,7 @@ function PhotoActionDialog({
   );
 }
 
-export function BorrowDialog({ gameId, gameTitle }: BorrowDialogProps) {
+export function BorrowDialog({ gameId, gameTitle, loanPeriodDays }: BorrowDialogProps) {
   return (
     <PhotoActionDialog
       action={borrowGameAction}
@@ -274,7 +275,7 @@ export function BorrowDialog({ gameId, gameTitle }: BorrowDialogProps) {
       eyebrow="Borrow"
       title={gameTitle}
       fieldLabel="대여 전 게임 사진"
-      note="대여기간은 승인 시점부터 최대 7일입니다."
+      note={`대여기간은 승인 시점부터 최대 ${loanPeriodDays}일입니다.`}
       submitLabel="사진 업로드 후 대여 완료"
       pendingLabel="대여 처리 중..."
     />

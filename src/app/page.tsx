@@ -14,6 +14,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { createKoreaDateFormatter } from "@/lib/date-time";
 import { matchesGameDetailFilters } from "@/lib/game-search";
+import { getKoreaMonthRange, getLoanPolicy } from "@/lib/loan-policy";
 
 const PAGE_SIZE = 24;
 
@@ -79,7 +80,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   };
 
   const now = new Date();
-  const [gameRows, availableCount, pendingLoanRequestCount, meetups, myActiveLoans, announcements] = await Promise.all([
+  const monthRange = getKoreaMonthRange(now);
+  const [gameRows, availableCount, pendingLoanRequestCount, meetups, myActiveLoans, announcements, loanPolicy, monthlyLoanCount] = await Promise.all([
     prisma.game.findMany({
       where: gameWhere,
       orderBy: [{ status: "asc" }, { title: "asc" }],
@@ -225,6 +227,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         body: true,
         publishedAt: true
       }
+    }),
+    getLoanPolicy(),
+    prisma.loanActivityLog.count({
+      where: {
+        type: "BORROW",
+        borrowerId: user.id,
+        occurredAt: { gte: monthRange.start, lt: monthRange.end }
+      }
     })
   ]);
 
@@ -257,6 +267,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   const totalPages = Math.max(1, Math.ceil(gameTotal / PAGE_SIZE));
   const urgentLoans = myActiveLoans.filter((loan) => loan.dueAt.getTime() - now.getTime() <= DAY_MS);
+  const reachedLoanLimit = myActiveLoans.length >= loanPolicy.maxActiveLoansPerUser;
+  const reachedMonthlyLoanLimit = monthlyLoanCount >= loanPolicy.maxLoansPerMonth;
   const pageHref = (targetPage: number) => {
     const hrefParams = new URLSearchParams();
 
@@ -432,8 +444,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                         <RatingDialog gameId={game.id} gameTitle={game.title} rating={myRating ?? null} />
                       </div>
                       <div className="game-loan-actions">
-                        {game.status === "AVAILABLE" && !pendingBorrowRequest && !upcomingMeetup ? (
-                          <BorrowDialog gameId={game.id} gameTitle={game.title} />
+                        {game.status === "AVAILABLE" && !pendingBorrowRequest && !upcomingMeetup && reachedMonthlyLoanLimit ? (
+                          <span className="muted">이번 달 대여 한도 {loanPolicy.maxLoansPerMonth}회에 도달했습니다.</span>
+                        ) : game.status === "AVAILABLE" && !pendingBorrowRequest && !upcomingMeetup && reachedLoanLimit ? (
+                          <span className="muted">대여 한도 {loanPolicy.maxActiveLoansPerUser}개에 도달했습니다.</span>
+                        ) : game.status === "AVAILABLE" && !pendingBorrowRequest && !upcomingMeetup ? (
+                          <BorrowDialog gameId={game.id} gameTitle={game.title} loanPeriodDays={loanPolicy.loanPeriodDays} />
                         ) : canReturn && activeLoan ? (
                           <ReturnDialog loanId={activeLoan.id} gameTitle={game.title} />
                         ) : pendingBorrowRequest ? (

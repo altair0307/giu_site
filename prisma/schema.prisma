@@ -305,6 +305,14 @@ model LoanActivityLog {
   @@index([borrowerId])
 }
 
+model LoanPolicy {
+  id                    String   @id @default("default")
+  maxActiveLoansPerUser Int      @default(3)
+  maxLoansPerMonth      Int      @default(5)
+  loanPeriodDays        Int      @default(7)
+  updatedAt             DateTime @updatedAt
+}
+
 model Meetup {
   id           String              @id @default(cuid())
   kind         MeetupKind          @default(GENERAL)

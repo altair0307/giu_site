@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createMeetupAction, logoutAction } from "@/app/actions";
+import { createMeetupAction } from "@/app/actions";
 import { ActionForm } from "@/app/action-form";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatKoreaDateTimeLocal } from "@/lib/date-time";
+import { AppFrame } from "@/app/app-frame";
 
 const GAME_PICKER_SIZE = 12;
 
@@ -54,27 +55,10 @@ export default async function NewMeetupPage({ searchParams }: NewMeetupPageProps
   const totalPages = Math.max(1, Math.ceil(gameTotal / GAME_PICKER_SIZE));
 
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">Meetup</p>
-          <h1>게임 약속 만들기</h1>
-        </div>
-        <div className="account-box">
-          <span>
-            {user.name} <small>{user.loginId}</small>
-          </span>
-          <Link className="ghost-link" href="/">
-            대여 화면
-          </Link>
-          <form action={logoutAction}>
-            <button className="ghost-button">로그아웃</button>
-          </form>
-        </div>
-      </header>
+    <AppFrame title="게임 약속 만들기" user={user}>
 
       <section className="meetup-create-layout">
-        <ActionForm title="약속 정보" submitLabel="약속 등록" action={createMeetupAction}>
+        <ActionForm title="약속 정보" submitLabel="약속 등록" action={createMeetupAction} wizard>
           <fieldset className="wide segmented-field">
             <legend>약속 종류</legend>
             <label>
@@ -176,6 +160,6 @@ export default async function NewMeetupPage({ searchParams }: NewMeetupPageProps
           </div>
         </aside>
       </section>
-    </main>
+    </AppFrame>
   );
 }

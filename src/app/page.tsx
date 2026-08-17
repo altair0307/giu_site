@@ -3,13 +3,13 @@ import { redirect } from "next/navigation";
 import type { GameStatus, Prisma } from "@prisma/client";
 import {
   createBridgeRoomAction,
-  logoutAction,
 } from "@/app/actions";
 import { AnnouncementPopup } from "@/app/announcement-popup";
 import { BorrowDialog, ReturnDialog } from "@/app/borrow-dialog";
 import { RatingDialog } from "@/app/rating-dialog";
 import { RatingSummaryDialog } from "@/app/rating-summary-dialog";
 import { StarRating } from "@/app/star-rating";
+import { AppFrame } from "@/app/app-frame";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { createKoreaDateFormatter } from "@/lib/date-time";
@@ -285,7 +285,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   };
 
   return (
-    <main className="app-shell">
+    <AppFrame
+      title="보드게임 대여와 약속"
+      user={user}
+      loanStatus={{ monthly: monthlyLoanCount, monthlyLimit: loanPolicy.maxLoansPerMonth, active: myActiveLoans.length }}
+    >
       <AnnouncementPopup
         announcements={announcements.map((announcement) => ({
           ...announcement,
@@ -293,32 +297,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           publishedAtLabel: announcementDateFormatter.format(announcement.publishedAt)
         }))}
       />
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">Club Room</p>
-          <h1>보드게임 대여와 약속</h1>
-        </div>
-        <div className="account-box">
-          <span>
-            {user.name} <small>{user.loginId}</small>
-          </span>
-          {user.role === "ADMIN" ? (
-            <Link className="ghost-link" href="/admin">
-              관리자
-            </Link>
-          ) : null}
-          <Link className="ghost-link" href="/account">
-            내 페이지
-          </Link>
-          <form action={logoutAction}>
-            <button className="ghost-button">로그아웃</button>
-          </form>
-        </div>
-      </header>
-
       {meetupError ? <p className="notice error-notice">{meetupError}</p> : null}
 
-      <section className="stats-grid">
+      <section className="stats-grid compact-stats">
         <div className="stat">
           <span>검색 결과</span>
           <strong>{gameTotal}</strong>
@@ -355,14 +336,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
       <section className="content-grid">
         <div className="main-column">
-          <section className="section-block">
-            <div className="section-heading">
-              <h2>보드게임</h2>
-              <span>페이지 {page}/{totalPages}</span>
-            </div>
-
+          <section className="section-block game-catalog">
+            <form className="hero-search">
+              <input name="q" defaultValue={q} placeholder="게임명 검색" aria-label="게임명 검색" />
+              <button className="primary-button">검색</button>
+            </form>
             <form className="filter-bar game-search-bar">
-              <input name="q" defaultValue={q} placeholder="게임명 검색" />
+              <input type="hidden" name="q" value={q} />
               <select name="status" defaultValue={status}>
                 <option value="ALL">전체 상태</option>
                 <option value="AVAILABLE">대여 가능</option>
@@ -373,13 +353,23 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               <input name="playTime" type="number" min="1" defaultValue={playTime} placeholder="시간(분)" />
               <input name="genre" defaultValue={genre} placeholder="장르" />
               <input name="weight" defaultValue={weight} placeholder="웨이트" />
-              <button className="secondary-button">검색</button>
+              <button className="secondary-button">필터 적용</button>
+              <Link className="filter-reset" href="/">초기화</Link>
             </form>
+
+            <div className="section-heading catalog-heading">
+              <h2>전체 게임</h2>
+              <span>검색 결과 {gameTotal}개 · 페이지 {page}/{totalPages}</span>
+            </div>
 
             <div className="game-table">
               <div className="game-table-head">
-                <span>게임</span>
-                <span>정보</span>
+                <span>게임명</span>
+                <span>장르</span>
+                <span>인원</span>
+                <span>베스트 인원</span>
+                <span>시간(분)</span>
+                <span>웨이트</span>
                 <span>상태</span>
                 <span>작업</span>
               </div>
@@ -400,13 +390,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
                 return (
                   <article className="game-row" key={game.id}>
-                    <strong>{game.title}</strong>
+                    <span className="game-title-cell"><strong>{game.title}</strong></span>
+                    <span>{game.genre || "-"}</span>
+                    <span>{game.players || "-"}</span>
+                    <span>{game.bestPlayers || "-"}</span>
+                    <span>{game.playTime || "-"}</span>
                     <span className="game-info-cell">
-                      <span>
-                        {[game.players, game.bestPlayers ? `베스트 ${game.bestPlayers}` : "", game.playTime ? `${game.playTime}분` : "", game.genre, game.weight ? `웨이트 ${game.weight}` : ""]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </span>
+                      <span>{game.weight || "-"}</span>
                       {myRating ? <StarRating className="game-inline-rating" label="내 평점" score={myRating.score} /> : null}
                       {averageScore !== null ? (
                         <span className="game-inline-rating-line">
@@ -426,7 +416,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                             ? "반납 승인 대기"
                             : `${activeLoan?.borrower.name ?? "회원"} 대여 중`}
                     </span>
-                    <div className="game-action-stack">
+                    <div className="game-action-stack game-action-inline">
                       <div className="game-rating-actions">
                         <RatingSummaryDialog
                           gameTitle={game.title}
@@ -552,6 +542,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
 
       </section>
-    </main>
+    </AppFrame>
   );
 }

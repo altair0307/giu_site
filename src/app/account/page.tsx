@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { logoutAction } from "@/app/actions";
 import { ReturnDialog } from "@/app/borrow-dialog";
 import { RatingDialog } from "@/app/rating-dialog";
 import { StarRating } from "@/app/star-rating";
@@ -8,6 +7,7 @@ import { calculateBridgeSessionScore } from "@/lib/bridge-results";
 import { prisma } from "@/lib/db";
 import { createKoreaDateFormatter } from "@/lib/date-time";
 import { getRatingReasonLabel } from "@/lib/game-rating";
+import { AppFrame } from "@/app/app-frame";
 
 const dateFormatter = createKoreaDateFormatter({
   month: "short",
@@ -18,8 +18,12 @@ const dateFormatter = createKoreaDateFormatter({
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export default async function AccountPage() {
+type AccountPageProps = { searchParams: Promise<{ tab?: string }> };
+
+export default async function AccountPage({ searchParams }: AccountPageProps) {
   const user = await requireUser();
+  const params = await searchParams;
+  const activeTab = params.tab === "bridge" ? "bridge" : "ratings";
   const now = new Date();
   const [loans, ratings, bridgeResults] = await Promise.all([
     prisma.loan.findMany({
@@ -106,31 +110,9 @@ export default async function AccountPage() {
   }).length;
 
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">My Page</p>
-          <h1>내 페이지</h1>
-        </div>
-        <div className="account-box">
-          <span>
-            {user.name} <small>{user.loginId}</small>
-          </span>
-          <Link className="ghost-link" href="/">
-            홈
-          </Link>
-          {user.role === "ADMIN" ? (
-            <Link className="ghost-link" href="/admin">
-              관리자
-            </Link>
-          ) : null}
-          <form action={logoutAction}>
-            <button className="ghost-button">로그아웃</button>
-          </form>
-        </div>
-      </header>
+    <AppFrame title="내 페이지" user={user}>
 
-      <section className="stats-grid account-stats-grid">
+      <section className="stats-grid account-stats-grid account-overview-stats">
         <div className="stat">
           <span>대여 중</span>
           <strong>{loans.length}</strong>
@@ -163,7 +145,7 @@ export default async function AccountPage() {
         <p className="notice warning-notice">반납 기한이 하루 이내인 보드게임이 {dueSoonCount}개 있습니다.</p>
       ) : null}
 
-      <section className="section-block">
+      <section className="section-block account-current-section">
         <div className="section-heading">
           <h2>반납 가능한 보드게임</h2>
           <span>{returnableLoans.length}개</span>
@@ -231,7 +213,12 @@ export default async function AccountPage() {
         </section>
       ) : null}
 
-      <section className="section-block">
+      <nav className="account-tabs" aria-label="내 활동 기록">
+        <Link className={activeTab === "ratings" ? "active" : ""} href="/account?tab=ratings">내 평점 <span>{ratings.length}</span></Link>
+        <Link className={activeTab === "bridge" ? "active" : ""} href="/account?tab=bridge">브릿지 기록 <span>{bridgeResults.length}</span></Link>
+      </nav>
+
+      {activeTab === "bridge" ? <section className="section-block account-history-panel">
         <div className="section-heading">
           <h2>내 브릿지 기록</h2>
           <span>{bridgeResults.length}개</span>
@@ -261,9 +248,9 @@ export default async function AccountPage() {
           })}
           {bridgeResults.length === 0 ? <p className="empty account-empty">저장된 브릿지 세션 기록이 없습니다.</p> : null}
         </div>
-      </section>
+      </section> : null}
 
-      <section className="section-block">
+      {activeTab === "ratings" ? <section className="section-block account-history-panel">
         <div className="section-heading">
           <h2>내가 매긴 평점</h2>
           <span>{ratings.length}개</span>
@@ -312,7 +299,7 @@ export default async function AccountPage() {
             <p className="empty account-empty">아직 매긴 평점이 없습니다.</p>
           ) : null}
         </div>
-      </section>
-    </main>
+      </section> : null}
+    </AppFrame>
   );
 }

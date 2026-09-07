@@ -32,6 +32,13 @@ export function AppFrame({ children, title, user, admin = false, loanStatus }: A
 
   return (
     <main className="product-shell">
+      <header className="mobile-product-header">
+        <Link className="mobile-brand" href="/" aria-label="GIU 보드게임 홈">GIU</Link>
+        <Link className="mobile-account-link" href="/account" aria-label="내 페이지">
+          <UserCircle size={22} />
+          <span>{user.name}</span>
+        </Link>
+      </header>
       <aside className="product-sidebar">
         <Link className="brand-lockup" href="/" aria-label="GIU 보드게임 홈">
           <strong>GIU</strong>
@@ -77,6 +84,26 @@ export function AppFrame({ children, title, user, admin = false, loanStatus }: A
         </header>
         {children}
       </div>
+
+      <nav className="mobile-bottom-nav" aria-label="모바일 주요 메뉴">
+        {primaryLinks.map(({ href, label, icon: Icon }) => (
+          <Link
+            aria-current={isActive(href) && !admin ? "page" : undefined}
+            className={isActive(href) && !admin ? "active" : ""}
+            href={href}
+            key={href}
+          >
+            <Icon size={21} weight={isActive(href) && !admin ? "fill" : "regular"} />
+            <span>{label}</span>
+          </Link>
+        ))}
+        {user.role === "ADMIN" ? (
+          <Link aria-current={admin ? "page" : undefined} className={admin ? "active" : ""} href="/admin">
+            <GearSix size={21} weight={admin ? "fill" : "regular"} />
+            <span>관리자</span>
+          </Link>
+        ) : null}
+      </nav>
     </main>
   );
 }

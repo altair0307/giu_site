@@ -12,7 +12,9 @@
   --amber: #a85d1b;
   --danger: #b3261e;
   --warning: #8a5a00;
+  --info: #315f78;
   --shadow: 0 8px 24px rgba(24, 51, 39, 0.035);
+  --modal-shadow: 0 24px 80px rgba(31, 42, 50, 0.22);
 }
 
 * {
@@ -34,8 +36,11 @@ body {
 .product-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 148px minmax(0, 1fr);
+  grid-template-columns: 176px minmax(0, 1fr);
 }
+
+.mobile-product-header,
+.mobile-bottom-nav { display: none; }
 
 .product-sidebar {
   position: sticky;
@@ -44,13 +49,13 @@ body {
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--line);
-  padding: 24px 16px;
+  padding: 27px 17px 20px;
   background: rgba(255, 255, 255, 0.72);
 }
 
 .brand-lockup {
   display: grid;
-  justify-items: center;
+  justify-items: start;
   gap: 0;
   margin-bottom: 24px;
   color: var(--primary);
@@ -95,7 +100,7 @@ body {
 
 .product-main {
   min-width: 0;
-  padding: 26px 32px 54px;
+  padding: 29px clamp(24px, 3.3vw, 52px) 60px;
 }
 
 .product-topbar {
@@ -244,23 +249,41 @@ body {
 .admin-summary-card strong { font-size: 24px; }
 
 @media (max-width: 680px) {
-  .product-shell { grid-template-columns: 1fr; }
+  body { padding-bottom: 70px; }
+  .product-shell { display: block; }
   .product-sidebar {
-    position: static;
-    width: 100%;
-    height: auto;
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    align-items: center;
-    padding: 12px 16px;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
+    display: none;
   }
-  .brand-lockup { margin: 0 18px 0 0; }
-  .brand-lockup span { display: none; }
-  .side-nav { display: flex; border: 0; padding: 0; }
-  .side-nav-admin { margin: 0; }
-  .side-nav-link { min-height: 42px; padding: 0 10px; }
+  .mobile-product-header {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    min-height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--line);
+    padding: 0 16px;
+    background: rgba(251, 250, 247, .96);
+    backdrop-filter: blur(12px);
+  }
+  .mobile-brand { color: var(--primary); font-family: Georgia, serif; font-size: 27px; text-decoration: none; }
+  .mobile-account-link { display: flex; align-items: center; gap: 7px; color: var(--text); font-size: 12px; text-decoration: none; }
+  .mobile-bottom-nav {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    min-height: 70px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-top: 1px solid var(--line);
+    padding-bottom: env(safe-area-inset-bottom);
+    background: var(--surface);
+  }
+  .mobile-bottom-nav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--muted); font-size: 11px; text-decoration: none; }
+  .mobile-bottom-nav a.active { color: var(--primary); background: var(--surface-soft); }
   .product-main { padding: 20px 16px 42px; }
   .product-topbar { align-items: center; }
   .product-account .account-name { display: none; }
@@ -2240,10 +2263,26 @@ button.playing-card {
 .auth-shell {
   min-height: 100vh;
   display: grid;
-  place-content: center;
-  gap: 16px;
-  padding: 24px;
+  grid-template-columns: minmax(360px, 1fr) minmax(460px, 1fr);
+  background: var(--surface);
 }
+
+.auth-story {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: clamp(38px, 7vw, 100px);
+  background: var(--surface-soft);
+}
+
+.auth-brand { color: var(--primary); font-family: Georgia, serif; font-size: 32px; text-decoration: none; }
+.auth-brand span { display: block; margin-top: 3px; font-family: Pretendard, "Noto Sans KR", sans-serif; font-size: 14px; }
+.auth-story p { margin-bottom: 16px; color: var(--primary); font-size: 12px; font-weight: 800; letter-spacing: .08em; }
+.auth-story h2 { max-width: 560px; margin-bottom: 20px; color: var(--primary); font-family: Georgia, "Nanum Myeongjo", serif; font-size: clamp(38px, 4.5vw, 62px); line-height: 1.16; letter-spacing: -2px; }
+.auth-story div > span { display: block; max-width: 500px; color: var(--muted); font-size: 15px; }
+.auth-form-area { display: grid; place-items: center; padding: 32px; }
+.auth-form-area > div { width: min(430px, 100%); }
 
 .error-shell {
   min-height: 100vh;
@@ -2278,14 +2317,25 @@ button.playing-card {
 }
 
 .auth-panel {
-  width: min(420px, calc(100vw - 32px));
+  width: 100%;
   display: grid;
   gap: 16px;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
 }
 
 .auth-link {
   text-align: center;
   color: var(--muted);
+}
+
+@media (max-width: 760px) {
+  .auth-shell { display: block; }
+  .auth-story { min-height: 245px; padding: 28px 22px; }
+  .auth-story h2 { margin: 40px 0 12px; font-size: 34px; }
+  .auth-story div > span { display: none; }
+  .auth-form-area { padding: 34px 18px; }
 }
 
 @media (max-width: 900px) {
